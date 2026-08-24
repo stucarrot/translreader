@@ -725,21 +725,56 @@ function chunkText(text, maxLen=3500){
 async function translateChunkGemini(chunk, key){
   const prompt = `다음은 소설 본문 일부이다. 이것을 자연스러운 ${memory.targetLangName}로 번역하라. 문단 구분(빈 줄)을 그대로 유지하고, 대화체와 어감을 살려라. 번역문 이외의 설명, 주석, 원문 병기는 절대 출력하지 마라.\n\n${chunk}`;
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(memory.geminiModel)}:generateContent?key=${encodeURIComponent(key)}`;
-  const res = await fetch(url, {
-    method:'POST',
-    headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({
-      contents:[{parts:[{text:prompt}]}],
-      generationConfig:{temperature:0.3}
-    })
+  const bodyStr = JSON.stringify({
+    contents:[{parts:[{text:prompt}]}],
+    generationConfig:{temperature:0.3}
   });
-  if(!res.ok){
-    const errBody = await res.text().catch(()=> '');
-    throw new Error('Gemini HTTP '+res.status+' '+errBody.slice(0,200));
+  const reqOpts = {method:'POST', headers:{'Content-Type':'application/json'}, body: bodyStr};
+
+  // 1차: 브라우저에서 직접 호출
+  let status = null, text = null, networkErr = null;
+  try{
+    const res = await fetch(url, reqOpts);
+    status = res.status;
+    text = await res.text();
+  }catch(e){
+    networkErr = e;
   }
-  const data = await res.json();
+
+  let data = null;
+  if(text !== null){
+    try{ data = JSON.parse(text); }catch(e){ data = null; }
+  }
+
+  // 직접 호출이 네트워크 오류이거나, 응답이 JSON이 아니면(예: 리퍼러 제한으로 인한 차단 HTML 페이지)
+  // corsproxy.io를 통해 한 번 더 시도한다. 프록시를 거치면 요청의 Origin/Referer가 바뀌어
+  // "웹사이트 제한"이 걸린 키에서도 통과되는 경우가 있다.
+  if(networkErr || !data){
+    try{
+      const proxyUrl = 'https://corsproxy.io/?url=' + encodeURIComponent(url);
+      const res2 = await fetch(proxyUrl, reqOpts);
+      status = res2.status;
+      text = await res2.text();
+      try{ data = JSON.parse(text); }catch(e){ data = null; }
+    }catch(e2){
+      const reason = networkErr ? networkErr.message : 'HTTP '+status+', 응답이 JSON 아님';
+      throw new Error(`Gemini 연결 실패 (직접 호출: ${reason} / 프록시 경유: ${e2.message}). 네트워크 또는 방화벽 문제일 수 있습니다.`);
+    }
+  }
+
+  if(!data){
+    const snippet = (text||'').slice(0,150).replace(/\s+/g,' ');
+    throw new Error(`Gemini가 JSON이 아닌 응답을 반환했습니다 (HTTP ${status}): "${snippet}". API 키의 "웹사이트 제한(HTTP referrer)"이 설정되어 있다면 Google AI Studio/Cloud Console에서 제한을 해제하거나 이 사이트 주소를 허용 목록에 추가해보세요.`);
+  }
+  if(status && status >= 400){
+    const msg = (data.error && data.error.message) ? data.error.message : JSON.stringify(data).slice(0,200);
+    throw new Error(`Gemini HTTP ${status}: ${msg}`);
+  }
   const cand = data.candidates && data.candidates[0];
-  if(!cand || !cand.content || !cand.content.parts) throw new Error('Gemini 빈 응답('+(cand&&cand.finishReason||'unknown')+')');
+  if(!cand || !cand.content || !cand.content.parts){
+    const fb = data.promptFeedback ? JSON.stringify(data.promptFeedback) : (cand&&cand.finishReason)||'unknown';
+    throw new Error('Gemini 빈 응답 ('+fb+')');
+  }
   return cand.content.parts.map(p=>p.text||'').join('').trim();
 }
 
