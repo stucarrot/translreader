@@ -1,0 +1,1081 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>번역 리더 — 사이트 등록형 소설 번역 뷰어</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --ink:#1c211d;
+  --ink-2:#262c25;
+  --paper:#f2ecd9;
+  --paper-2:#e8e0c8;
+  --paper-line:#d8cca8;
+  --seal:#a8382f;
+  --seal-dark:#832920;
+  --brass:#b6903f;
+  --brass-soft:#d8bd83;
+  --ok:#4c7a52;
+  --warn:#a8382f;
+  --text-dim:#8a9186;
+  --radius:3px;
+  --shadow-page: 0 1px 0 rgba(0,0,0,.03), 0 12px 30px -14px rgba(0,0,0,.45);
+  font-family:'IBM Plex Sans KR',system-ui,sans-serif;
+}
+*{box-sizing:border-box;}
+html,body{margin:0;padding:0;height:100%;background:var(--ink);color:var(--paper);}
+body{display:flex;flex-direction:column;min-height:100vh;}
+::selection{background:var(--brass-soft);color:var(--ink);}
+button{font-family:inherit;cursor:pointer;}
+input,select,textarea{font-family:inherit;}
+a{color:var(--brass-soft);}
+
+/* ---------- topbar ---------- */
+.topbar{
+  background:linear-gradient(180deg,var(--ink-2),var(--ink));
+  border-bottom:1px solid #000;
+  padding:10px 16px;
+  display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+  position:sticky;top:0;z-index:40;
+}
+.brand{display:flex;align-items:center;gap:8px;margin-right:4px;flex-shrink:0;}
+.brand .seal{
+  width:26px;height:26px;border-radius:50%;
+  background:radial-gradient(circle at 35% 30%, var(--seal), var(--seal-dark));
+  display:flex;align-items:center;justify-content:center;
+  font-family:'Newsreader',serif;font-weight:600;font-size:13px;color:#f2e6c9;
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.15), 0 2px 4px rgba(0,0,0,.4);
+}
+.brand-name{font-family:'Newsreader',serif;font-size:17px;letter-spacing:.02em;color:var(--paper);white-space:nowrap;}
+.brand-name em{color:var(--brass-soft);font-style:normal;}
+
+.urlbar{
+  flex:1 1 320px;display:flex;gap:6px;align-items:center;
+  background:#151915;border:1px solid #3a4139;border-radius:var(--radius);
+  padding:4px 4px 4px 10px;
+}
+.urlbar input{
+  flex:1;background:transparent;border:none;outline:none;color:var(--paper);
+  font-family:'IBM Plex Mono',monospace;font-size:12.5px;min-width:0;
+}
+.urlbar input::placeholder{color:#5c6459;}
+.btn{
+  border:1px solid #3a4139;background:#232920;color:var(--paper);
+  padding:7px 12px;border-radius:var(--radius);font-size:12.5px;font-weight:500;
+  white-space:nowrap;transition:background .12s,border-color .12s;
+}
+.btn:hover{background:#2c332a;border-color:#4a5342;}
+.btn:disabled{opacity:.4;cursor:not-allowed;}
+.btn-primary{background:var(--seal);border-color:var(--seal-dark);color:#fbeee0;}
+.btn-primary:hover{background:#b8453b;}
+.btn-ghost{background:transparent;border-color:transparent;}
+.btn-ghost:hover{background:#232920;}
+.btn-icon{padding:7px 9px;font-size:14px;line-height:1;}
+
+.profile-select{
+  background:#151915;border:1px solid #3a4139;color:var(--paper);
+  border-radius:var(--radius);padding:7px 8px;font-size:12.5px;max-width:150px;
+}
+
+/* ---------- layout ---------- */
+.layout{flex:1;display:flex;min-height:0;}
+.main{flex:1;display:flex;flex-direction:column;min-width:0;padding:22px 22px 0;overflow-y:auto;}
+.side{
+  width:290px;flex-shrink:0;background:var(--ink-2);border-left:1px solid #000;
+  padding:16px 14px;overflow-y:auto;
+}
+@media (max-width:880px){
+  .layout{flex-direction:column;}
+  .side{width:100%;border-left:none;border-top:1px solid #000;}
+}
+
+/* ---------- chapter strip ---------- */
+.navstrip{display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap;}
+.ribbon{
+  background:var(--brass);color:#2b2107;font-family:'IBM Plex Mono',monospace;
+  font-size:12px;font-weight:600;padding:5px 10px 5px 8px;border-radius:2px 2px 2px 8px;
+  position:relative;
+}
+.status-line{font-size:12px;color:var(--text-dim);display:flex;align-items:center;gap:6px;}
+.dot{width:6px;height:6px;border-radius:50%;background:var(--text-dim);flex-shrink:0;}
+.dot.busy{background:var(--brass-soft);animation:pulse 1s infinite ease-in-out;}
+.dot.ok{background:var(--ok);}
+.dot.err{background:var(--seal);}
+@keyframes pulse{0%,100%{opacity:.3}50%{opacity:1}}
+
+/* ---------- page (reading pane) ---------- */
+.page-wrap{flex:1;display:flex;flex-direction:column;padding-bottom:26px;}
+.viewtabs{display:flex;gap:2px;margin-bottom:0;}
+.viewtabs button{
+  background:#232920;color:var(--text-dim);border:1px solid #000;border-bottom:none;
+  padding:8px 16px;font-size:12.5px;border-radius:6px 6px 0 0;
+}
+.viewtabs button.active{background:var(--paper);color:var(--ink);font-weight:600;}
+.page{
+  background:var(--paper);color:var(--ink);border-radius:0 6px 6px 6px;
+  box-shadow:var(--shadow-page);
+  padding:38px 42px 48px;flex:1;min-height:300px;
+}
+.page-title{font-family:'Newsreader',serif;font-size:22px;margin:0 0 22px;color:#2b2718;border-bottom:1px solid var(--paper-line);padding-bottom:14px;}
+.page-body{font-family:'Newsreader',serif;font-size:18px;line-height:1.9;color:#2a2a20;white-space:pre-wrap;}
+.page-body.mono-empty{font-family:'IBM Plex Sans KR',sans-serif;font-size:13.5px;color:#8a8368;white-space:normal;}
+.split{display:grid;grid-template-columns:1fr 1fr;gap:28px;}
+.split .col h4{font-family:'IBM Plex Mono',monospace;font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--brass);margin:0 0 10px;}
+.split .col{border-left:1px dashed var(--paper-line);padding-left:24px;}
+.split .col:first-child{border-left:none;padding-left:0;}
+@media (max-width:720px){.split{grid-template-columns:1fr;}.split .col{border-left:none;padding-left:0;border-top:1px dashed var(--paper-line);padding-top:16px;}}
+
+.pagenav{display:flex;justify-content:space-between;align-items:center;margin-top:16px;gap:10px;}
+.pagenav .btn{flex:1;text-align:center;}
+
+/* ---------- side panel ---------- */
+.side h3{font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--brass-soft);margin:0 0 10px;display:flex;align-items:center;justify-content:space-between;}
+.side-section{margin-bottom:22px;padding-bottom:18px;border-bottom:1px solid #333a30;}
+.side-section:last-child{border-bottom:none;}
+.field{margin-bottom:10px;}
+.field label{display:block;font-size:11.5px;color:var(--text-dim);margin-bottom:4px;}
+.field input,.field select,.field textarea{
+  width:100%;background:#151915;border:1px solid #3a4139;color:var(--paper);
+  border-radius:var(--radius);padding:7px 8px;font-size:12.5px;
+}
+.field textarea{font-family:'IBM Plex Mono',monospace;resize:vertical;min-height:56px;}
+.hint{font-size:11px;color:#6d7568;line-height:1.5;margin-top:6px;}
+.hint b{color:var(--brass-soft);}
+.chaplist{list-style:none;margin:0;padding:0;font-size:12px;max-height:220px;overflow-y:auto;}
+.chaplist li{padding:6px 6px;border-bottom:1px solid #2c332a;display:flex;justify-content:space-between;gap:6px;align-items:center;}
+.chaplist li .t{color:#c9cdc2;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.chaplist li .x{color:#6d7568;background:none;border:none;font-size:13px;}
+.small-btn{font-size:11px;padding:5px 8px;}
+.row{display:flex;gap:6px;}
+.row > *{flex:1;}
+.checkrow{display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--text-dim);margin-top:6px;}
+.badge{display:inline-block;font-size:10px;padding:1px 6px;border-radius:8px;background:#2c332a;color:var(--brass-soft);margin-left:6px;}
+
+/* ---------- modal ---------- */
+.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;align-items:center;justify-content:center;z-index:100;padding:20px;}
+.modal-bg.show{display:flex;}
+.modal{background:var(--ink-2);border:1px solid #3a4139;border-radius:8px;width:100%;max-width:560px;max-height:88vh;overflow-y:auto;padding:22px 24px;}
+.modal h2{font-family:'Newsreader',serif;font-size:19px;margin:0 0 4px;color:var(--paper);}
+.modal .sub{font-size:12px;color:var(--text-dim);margin-bottom:18px;}
+.modal-close{float:right;background:none;border:none;color:var(--text-dim);font-size:18px;}
+.candlist{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0 14px;}
+.cand{
+  background:#151915;border:1px solid #3a4139;color:var(--paper);padding:5px 9px;border-radius:14px;
+  font-family:'IBM Plex Mono',monospace;font-size:11px;display:flex;gap:6px;align-items:center;
+}
+.cand .role-btn{background:#2c332a;border:1px solid #444d3d;color:var(--text-dim);border-radius:10px;padding:2px 7px;font-size:10px;}
+.cand .role-btn.on-id{background:var(--brass);color:#2b2107;border-color:var(--brass);}
+.cand .role-btn.on-page{background:var(--seal);color:#fbeee0;border-color:var(--seal-dark);}
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+.footer-row{display:flex;justify-content:flex-end;gap:8px;margin-top:18px;}
+
+.toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:#232920;border:1px solid #3a4139;color:var(--paper);padding:10px 16px;border-radius:6px;font-size:12.5px;z-index:200;box-shadow:0 8px 24px rgba(0,0,0,.4);max-width:90vw;}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="brand"><span class="seal">譯</span><span class="brand-name">번역 <em>리더</em></span></div>
+  <select class="profile-select" id="profileSelect" title="등록된 사이트 유형"></select>
+  <div class="urlbar">
+    <input id="urlInput" type="text" placeholder="소설 페이지 URL을 붙여넣으세요 (예: https://loveread.ec/read_book.php?id=134312&p=1)">
+    <button class="btn btn-primary" id="loadBtn">불러오기</button>
+  </div>
+  <button class="btn btn-icon" id="siteBtn" title="사이트 유형 등록/편집">🧩 사이트</button>
+  <button class="btn btn-icon" id="settingsBtn" title="번역 설정">⚙️ 설정</button>
+</div>
+
+<div class="layout">
+  <div class="main">
+    <div class="navstrip">
+      <span class="ribbon" id="pageRibbon">—</span>
+      <button class="btn" id="prevBtn">← 이전화</button>
+      <button class="btn" id="nextBtn">다음화 →</button>
+      <span class="status-line"><span class="dot" id="statusDot"></span><span id="statusText">대기 중</span></span>
+    </div>
+
+    <div class="page-wrap">
+      <div class="viewtabs">
+        <button class="active" data-view="translated">번역</button>
+        <button data-view="original">원문</button>
+        <button data-view="split">나란히 보기</button>
+      </div>
+      <div class="page" id="pageEl">
+        <div class="page-title" id="pageTitle">시작하려면 URL을 불러오세요</div>
+        <div class="page-body mono-empty" id="pageBody">사이트 유형을 선택하거나 새로 등록한 뒤, 상단에 회차 URL을 붙여넣고 <b>불러오기</b>를 누르세요. 본문을 추출해 번역까지 자동으로 진행합니다.</div>
+      </div>
+      <div class="pagenav">
+        <button class="btn" id="prevBtn2">← 이전화</button>
+        <button class="btn btn-primary" id="translateBtn">이 화면 다시 번역</button>
+        <button class="btn" id="nextBtn2">다음화 →</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="side">
+    <div class="side-section">
+      <h3>이어받기 · 내보내기</h3>
+      <div class="field">
+        <label>연속으로 몇 화를 받아 번역할까요?</label>
+        <div class="row">
+          <input type="number" id="batchCount" value="5" min="1" max="200">
+          <button class="btn small-btn" id="batchBtn">이어서 번역</button>
+        </div>
+      </div>
+      <ul class="chaplist" id="chapList"></ul>
+      <div class="row" style="margin-top:8px;">
+        <button class="btn small-btn" id="exportBtn">전체 txt 저장</button>
+        <button class="btn small-btn" id="clearBtn">보관함 비우기</button>
+      </div>
+      <div class="hint">불러온 화들이 이 목록에 쌓입니다. 브라우저를 새로고침해도 <b>같은 작품의 진행 상황</b>은 유지되지만, API 키는 유지되지 않습니다.</div>
+    </div>
+
+    <div class="side-section">
+      <h3>현재 사이트 유형</h3>
+      <div id="profileSummary" style="font-size:12px;color:#b9beb0;line-height:1.7;"></div>
+      <button class="btn small-btn" style="margin-top:8px;width:100%;" id="editProfileBtn">이 유형 편집</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== Settings modal ===== -->
+<div class="modal-bg" id="settingsModal">
+  <div class="modal">
+    <button class="modal-close" data-close="settingsModal">✕</button>
+    <h2>번역 설정</h2>
+    <div class="sub">API 키는 저장되지 않고 <b>브라우저 메모리에만</b> 유지됩니다. 새로고침하면 다시 입력해야 합니다.</div>
+
+    <div class="field">
+      <label>Google AI Studio(Gemini) API 키 — 한 줄에 하나씩, 여러 개 입력 가능</label>
+      <textarea id="apiKeys" placeholder="AIzaSy...&#10;AIzaSy...&#10;AIzaSy..."></textarea>
+      <div class="hint">첫 번째 키가 실패(할당량 초과·오류)하면 다음 키로 자동 전환됩니다. 모든 키가 실패하면 <b>구글 번역</b>으로 자동 대체됩니다. 키를 하나도 입력하지 않으면 처음부터 구글 번역만 사용합니다.</div>
+    </div>
+    <div class="two-col">
+      <div class="field">
+        <label>Gemini 모델명</label>
+        <input id="geminiModel" type="text" value="gemini-2.5-flash">
+      </div>
+      <div class="field">
+        <label>번역 대상 언어</label>
+        <select id="targetLang">
+          <option value="ko" selected>한국어</option>
+          <option value="en">English</option>
+          <option value="ja">日本語</option>
+          <option value="zh-CN">中文(简体)</option>
+          <option value="vi">Tiếng Việt</option>
+        </select>
+      </div>
+    </div>
+    <div class="field">
+      <label>원본 HTML용 CORS 프록시 (선택자 모드 · 구글 번역 폴백에 사용)</label>
+      <select id="corsProxy">
+        <option value="https://api.allorigins.win/raw?url={url}">allorigins.win (권장)</option>
+        <option value="https://corsproxy.io/?url={url}">corsproxy.io</option>
+        <option value="custom">직접 입력…</option>
+      </select>
+      <input id="corsProxyCustom" type="text" style="margin-top:6px;display:none;" placeholder="https://your-proxy.com/?target={url}">
+      <div class="hint">GitHub Pages는 정적 사이트라 서버가 없어서, 브라우저에서 외부 소설 사이트를 직접 읽지 못하는 경우 위 프록시를 거칩니다. <code>{url}</code> 자리에 인코딩된 원본 주소가 들어갑니다. <b>리더 프록시(자동 추출) 모드는 항상 r.jina.ai를 별도로 사용하므로 이 설정과 무관합니다.</b></div>
+    </div>
+    <div class="footer-row">
+      <button class="btn btn-primary" data-close="settingsModal">저장하고 닫기</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== Site profile modal ===== -->
+<div class="modal-bg" id="siteModal">
+  <div class="modal">
+    <button class="modal-close" data-close="siteModal">✕</button>
+    <h2 id="siteModalTitle">사이트 유형 등록</h2>
+    <div class="sub">회차 URL 하나만 있으면, 어떤 숫자가 <b>작품 ID</b>이고 어떤 숫자가 <b>페이지/화수</b>인지 골라주는 것만으로 등록이 끝납니다.</div>
+
+    <div class="field">
+      <label>샘플 URL (지금 읽으려는 페이지 주소)</label>
+      <div class="row">
+        <input id="sampleUrl" type="text" placeholder="https://example.com/read?id=123&p=1">
+        <button class="btn small-btn" id="analyzeBtn">URL 분석</button>
+      </div>
+    </div>
+    <div class="field" id="candWrap" style="display:none;">
+      <label>숫자를 찾았습니다 — 역할을 선택하세요</label>
+      <div class="candlist" id="candList"></div>
+      <div class="hint">각 숫자 옆의 <b>ID</b> / <b>페이지</b> 버튼을 눌러 역할을 지정하세요. 나머지 숫자는 그대로 고정된 값으로 취급합니다.</div>
+    </div>
+
+    <div class="two-col">
+      <div class="field">
+        <label>유형 이름</label>
+        <input id="profName" type="text" placeholder="예: LoveRead.ec">
+      </div>
+      <div class="field">
+        <label>페이지 이동 단위(step)</label>
+        <input id="profStep" type="number" value="1">
+      </div>
+    </div>
+
+    <div class="field">
+      <label>가져오기 방식</label>
+      <select id="profMode">
+        <option value="reader">리더 프록시로 본문 자동 추출 (권장, 선택자 불필요)</option>
+        <option value="selector">원본 HTML + 선택자/자동감지</option>
+      </select>
+    </div>
+    <div id="selectorFields">
+      <div class="field">
+        <label>본문 CSS 선택자 (비워두면 자동 감지)</label>
+        <input id="profContentSel" type="text" placeholder="예: .chapter-content, #content 등">
+      </div>
+      <div class="field">
+        <label>제목 CSS 선택자 (선택)</label>
+        <input id="profTitleSel" type="text" placeholder="예: h1.title (비우면 &lt;title&gt; 태그 사용)">
+      </div>
+      <div class="field">
+        <label>제거할 요소 선택자 (쉼표로 구분)</label>
+        <input id="profRemoveSel" type="text" value="script, style, nav, header, footer, form, .ads">
+      </div>
+    </div>
+
+    <div class="footer-row">
+      <button class="btn" id="deleteProfBtn" style="margin-right:auto;">유형 삭제</button>
+      <button class="btn" data-close="siteModal">취소</button>
+      <button class="btn btn-primary" id="saveProfBtn">저장</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast" style="display:none;"></div>
+
+<script>
+/* =========================================================================
+   상태
+   ========================================================================= */
+const memory = {
+  apiKeys: [],
+  keyIndex: 0,
+  geminiModel: 'gemini-2.5-flash',
+  targetLang: 'ko',
+  targetLangName: '한국어',
+  corsProxyTemplate: 'https://api.allorigins.win/raw?url={url}',
+};
+
+const LS_PROFILES = 'tr_profiles_v1';
+const LS_LAST = 'tr_last_v1';
+
+let profiles = [];
+let currentProfileId = null;
+let currentUrl = '';
+let currentBookKey = null;   // profileId::idValue, used to bucket saved chapters
+let chapters = [];           // [{url, page, title, original, translated}]
+let currentView = 'translated';
+let busy = false;
+
+const LANG_NAMES = {ko:'한국어', en:'English', ja:'日本語', 'zh-CN':'중국어(간체)', vi:'베트남어'};
+
+/* =========================================================================
+   기본 제공 사이트 유형
+   ========================================================================= */
+function defaultProfiles(){
+  return [
+    {
+      id: 'loveread_ec',
+      name: 'LoveRead.ec',
+      hostname: 'loveread.ec',
+      idLoc: {type:'query', key:'id'},
+      pageLoc: {type:'query', key:'p'},
+      urlTemplate: 'https://loveread.ec/read_book.php?id={id}&p={page}',
+      step: 1,
+      mode: 'reader',
+      contentSel: '',
+      titleSel: '',
+      removeSel: 'script, style, nav, header, footer, form'
+    }
+  ];
+}
+
+function loadProfiles(){
+  try{
+    const raw = localStorage.getItem(LS_PROFILES);
+    profiles = raw ? JSON.parse(raw) : defaultProfiles();
+    if(!profiles.length) profiles = defaultProfiles();
+  }catch(e){ profiles = defaultProfiles(); }
+}
+function saveProfiles(){ localStorage.setItem(LS_PROFILES, JSON.stringify(profiles)); }
+
+function renderProfileSelect(){
+  const sel = document.getElementById('profileSelect');
+  sel.innerHTML = profiles.map(p=>`<option value="${p.id}">${escapeHtml(p.name)}</option>`).join('')
+    + `<option value="__new__">+ 새 사이트 등록…</option>`;
+  if(currentProfileId) sel.value = currentProfileId;
+}
+
+function getProfile(id){ return profiles.find(p=>p.id===id); }
+
+function profileSummaryHtml(p){
+  if(!p) return '<span style="color:#6d7568;">선택된 유형 없음</span>';
+  const idPart = p.idLoc.type==='query' ? `쿼리 <code>${p.idLoc.key}</code>` : `경로 ${p.idLoc.index+1}번째 조각`;
+  const pagePart = p.pageLoc.type==='query' ? `쿼리 <code>${p.pageLoc.key}</code>` : `경로 ${p.pageLoc.index+1}번째 조각`;
+  return `
+    <div><b>${escapeHtml(p.name)}</b></div>
+    <div>도메인: ${escapeHtml(p.hostname)}</div>
+    <div>작품ID 위치: ${idPart}</div>
+    <div>페이지 위치: ${pagePart} (±${p.step})</div>
+    <div>추출 방식: ${p.mode==='reader'?'리더 프록시 자동 추출':'선택자'+(p.contentSel?` (<code>${escapeHtml(p.contentSel)}</code>)`:' + 자동 감지')}</div>
+  `;
+}
+
+/* =========================================================================
+   유틸
+   ========================================================================= */
+function escapeHtml(s){ return String(s).replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+function toast(msg, ms=3200){
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.style.display='block';
+  clearTimeout(toast._t);
+  toast._t = setTimeout(()=>{ t.style.display='none'; }, ms);
+}
+function setStatus(text, kind){
+  document.getElementById('statusText').textContent = text;
+  const dot = document.getElementById('statusDot');
+  dot.className = 'dot' + (kind ? ' '+kind : '');
+}
+function setBusy(v){ busy = v; document.querySelectorAll('.btn').forEach(b=>{ if(v) b.setAttribute('data-was-disabled', b.disabled?'1':'0'); }); }
+
+/* =========================================================================
+   URL 분석 (사이트 등록용)
+   ========================================================================= */
+function analyzeUrl(urlStr){
+  let u;
+  try{ u = new URL(urlStr); }catch(e){ return null; }
+  const cands = [];
+  // path segments
+  const segs = u.pathname.split('/').filter(Boolean);
+  segs.forEach((seg,i)=>{
+    if(/^\d+$/.test(seg)){
+      cands.push({type:'path', index:i, value:seg, label:`경로[${i+1}] = ${seg}`});
+    }
+  });
+  // query params
+  for(const [k,v] of u.searchParams.entries()){
+    if(/^\d+$/.test(v)){
+      cands.push({type:'query', key:k, value:v, label:`쿼리 ${k} = ${v}`});
+    }
+  }
+  return {url:u, cands};
+}
+
+function buildProfileFromChoice(u, cands, idPick, pagePick, name, step, mode, contentSel, titleSel, removeSel){
+  // urlTemplate: reconstruct from URL, replacing chosen segments
+  const idLoc = idPick ? (idPick.type==='query' ? {type:'query', key:idPick.key} : {type:'path', index:idPick.index}) : null;
+  const pageLoc = pagePick ? (pagePick.type==='query' ? {type:'query', key:pagePick.key} : {type:'path', index:pagePick.index}) : null;
+  if(!pageLoc) return null;
+
+  const segs = u.pathname.split('/').filter(Boolean);
+  const tplSegs = segs.map((seg,i)=>{
+    if(idLoc && idLoc.type==='path' && idLoc.index===i) return '{id}';
+    if(pageLoc.type==='path' && pageLoc.index===i) return '{page}';
+    return seg;
+  });
+  const search = new URLSearchParams(u.search);
+  const qp = [];
+  for(const [k,v] of search.entries()){
+    if(idLoc && idLoc.type==='query' && idLoc.key===k) qp.push(`${k}={id}`);
+    else if(pageLoc.type==='query' && pageLoc.key===k) qp.push(`${k}={page}`);
+    else qp.push(`${k}=${encodeURIComponent(v)}`);
+  }
+  const template = `${u.origin}/${tplSegs.join('/')}` + (qp.length?`?${qp.join('&')}`:'');
+
+  return {
+    id: 'site_'+Date.now(),
+    name: name || u.hostname,
+    hostname: u.hostname,
+    idLoc: idLoc || {type:'query', key:'__none__'},
+    pageLoc,
+    urlTemplate: template,
+    step: Number(step)||1,
+    mode: mode,
+    contentSel: contentSel||'',
+    titleSel: titleSel||'',
+    removeSel: removeSel || 'script, style, nav, header, footer, form'
+  };
+}
+
+function buildUrlForPage(profile, idValue, pageValue){
+  return profile.urlTemplate.replace('{id}', idValue).replace('{page}', pageValue);
+}
+
+function extractIdAndPage(profile, urlStr){
+  let u;
+  try{ u = new URL(urlStr); }catch(e){ return null; }
+  function readLoc(loc){
+    if(!loc) return null;
+    if(loc.type==='query') return u.searchParams.get(loc.key);
+    if(loc.type==='path'){
+      const segs = u.pathname.split('/').filter(Boolean);
+      return segs[loc.index];
+    }
+    return null;
+  }
+  const idVal = readLoc(profile.idLoc);
+  const pageVal = readLoc(profile.pageLoc);
+  if(pageVal===null) return null;
+  return {id: idVal, page: pageVal};
+}
+
+/* =========================================================================
+   본문 가져오기 + 추출
+   ========================================================================= */
+function proxied(url){
+  const tpl = memory.corsProxyTemplate;
+  return tpl.replace('{url}', encodeURIComponent(url));
+}
+
+async function fetchChapter(profile, url){
+  if(profile.mode === 'reader'){
+    const readerUrl = 'https://r.jina.ai/' + url;
+    const res = await fetch(readerUrl);
+    if(!res.ok) throw new Error('리더 프록시 오류: HTTP '+res.status);
+    let text = await res.text();
+    // r.jina.ai prefixes with Title:/URL Source:/Markdown Content: — split those out
+    let title = '';
+    const m = text.match(/^Title:\s*(.+)\n/);
+    if(m){ title = m[1].trim(); }
+    const idx = text.indexOf('Markdown Content:');
+    if(idx !== -1) text = text.slice(idx + 'Markdown Content:'.length);
+    text = text.trim();
+    return { title: title || url, body: text };
+  } else {
+    const fetchUrl = proxied(url);
+    const res = await fetch(fetchUrl);
+    if(!res.ok) throw new Error('가져오기 오류: HTTP '+res.status);
+    const html = await res.text();
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    (profile.removeSel||'').split(',').map(s=>s.trim()).filter(Boolean).forEach(sel=>{
+      doc.querySelectorAll(sel).forEach(el=>el.remove());
+    });
+    let title = '';
+    if(profile.titleSel){
+      const te = doc.querySelector(profile.titleSel);
+      if(te) title = te.textContent.trim();
+    }
+    if(!title){
+      const te = doc.querySelector('title');
+      title = te ? te.textContent.trim() : url;
+    }
+    let bodyEl = null;
+    if(profile.contentSel){
+      bodyEl = doc.querySelector(profile.contentSel);
+    }
+    if(!bodyEl){
+      bodyEl = autoDetectContent(doc);
+    }
+    const body = bodyEl ? cleanBlockText(bodyEl) : '(본문을 찾지 못했습니다. 사이트 유형에서 선택자를 지정해 보세요.)';
+    return { title, body };
+  }
+}
+
+function cleanBlockText(el){
+  // convert <br> to newlines, block elements to paragraph breaks
+  const clone = el.cloneNode(true);
+  clone.querySelectorAll('br').forEach(br=>br.replaceWith('\n'));
+  clone.querySelectorAll('p,div,tr,li,h1,h2,h3,h4').forEach(b=>{
+    b.append('\n\n');
+  });
+  let text = clone.textContent || '';
+  text = text.replace(/[ \t]+\n/g,'\n').replace(/\n{3,}/g,'\n\n').trim();
+  return text;
+}
+
+function autoDetectContent(doc){
+  const candidates = doc.body ? doc.body.querySelectorAll('div,section,article,td,main') : [];
+  let best = null, bestScore = 0;
+  candidates.forEach(el=>{
+    if(el.querySelectorAll('div,section,article,td,main').length > 40) return; // skip big wrappers
+    const text = el.textContent || '';
+    const len = text.trim().length;
+    if(len < 200) return;
+    const linkText = Array.from(el.querySelectorAll('a')).reduce((s,a)=>s+(a.textContent||'').length,0);
+    const density = len ? linkText/len : 1;
+    if(density > 0.4) return;
+    const score = len * (1-density);
+    if(score > bestScore){ bestScore = score; best = el; }
+  });
+  return best || doc.body;
+}
+
+/* =========================================================================
+   번역 — Gemini 다중 키 + 구글 번역 폴백
+   ========================================================================= */
+function chunkText(text, maxLen=3500){
+  const paras = text.split(/\n{2,}/);
+  const chunks = [];
+  let cur = '';
+  for(const p of paras){
+    if((cur+'\n\n'+p).length > maxLen && cur){
+      chunks.push(cur); cur = p;
+    } else {
+      cur = cur ? cur+'\n\n'+p : p;
+    }
+  }
+  if(cur) chunks.push(cur);
+  return chunks.length ? chunks : [text];
+}
+
+async function translateChunkGemini(chunk, key){
+  const prompt = `다음은 소설 본문 일부이다. 이것을 자연스러운 ${memory.targetLangName}로 번역하라. 문단 구분(빈 줄)을 그대로 유지하고, 대화체와 어감을 살려라. 번역문 이외의 설명, 주석, 원문 병기는 절대 출력하지 마라.\n\n${chunk}`;
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(memory.geminiModel)}:generateContent?key=${encodeURIComponent(key)}`;
+  const res = await fetch(url, {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({
+      contents:[{parts:[{text:prompt}]}],
+      generationConfig:{temperature:0.3}
+    })
+  });
+  if(!res.ok){
+    const errBody = await res.text().catch(()=> '');
+    throw new Error('Gemini HTTP '+res.status+' '+errBody.slice(0,200));
+  }
+  const data = await res.json();
+  const cand = data.candidates && data.candidates[0];
+  if(!cand || !cand.content || !cand.content.parts) throw new Error('Gemini 빈 응답('+(cand&&cand.finishReason||'unknown')+')');
+  return cand.content.parts.map(p=>p.text||'').join('').trim();
+}
+
+async function translateChunkGoogle(chunk){
+  // google translate free endpoint has practical URL length limits; sub-chunk further
+  const subs = chunkText(chunk, 700);
+  const parts = [];
+  for(const s of subs){
+    const gurl = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=${encodeURIComponent(memory.targetLang)}&dt=t&q=${encodeURIComponent(s)}`;
+    const res = await fetch(proxied(gurl));
+    if(!res.ok) throw new Error('Google 번역 HTTP '+res.status);
+    const data = await res.json();
+    const seg = (data[0]||[]).map(x=>x[0]).join('');
+    parts.push(seg);
+    await sleep(180);
+  }
+  return parts.join('');
+}
+
+function sleep(ms){ return new Promise(r=>setTimeout(r,ms)); }
+
+let geminiExhausted = false;
+
+async function translateFullText(text, onProgress){
+  const chunks = chunkText(text);
+  const out = [];
+  for(let i=0;i<chunks.length;i++){
+    onProgress && onProgress(i, chunks.length);
+    let done = false;
+    if(memory.apiKeys.length && !geminiExhausted){
+      for(let attempt=0; attempt<memory.apiKeys.length; attempt++){
+        const key = memory.apiKeys[memory.keyIndex % memory.apiKeys.length];
+        try{
+          const t = await translateChunkGemini(chunks[i], key);
+          out.push(t);
+          done = true;
+          break;
+        }catch(e){
+          console.warn('Gemini key failed, rotating:', e.message);
+          memory.keyIndex = (memory.keyIndex+1) % memory.apiKeys.length;
+        }
+      }
+      if(!done){
+        geminiExhausted = true;
+        toast('모든 Gemini 키가 실패해 구글 번역으로 전환합니다.');
+      }
+    }
+    if(!done){
+      const t = await translateChunkGoogle(chunks[i]);
+      out.push(t);
+    }
+  }
+  onProgress && onProgress(chunks.length, chunks.length);
+  return out.join('\n\n');
+}
+
+/* =========================================================================
+   메인 로딩 흐름
+   ========================================================================= */
+async function loadAndTranslate(url, {silent}={}){
+  const profile = getProfile(currentProfileId);
+  if(!profile){ toast('먼저 사이트 유형을 선택하거나 등록하세요.'); return null; }
+  setBusy(true);
+  setStatus('본문 가져오는 중…', 'busy');
+  try{
+    const ids = extractIdAndPage(profile, url);
+    const {title, body} = await fetchChapter(profile, url);
+    setStatus('번역 중…', 'busy');
+    const translated = await translateFullText(body, (i,n)=> setStatus(`번역 중… (${i}/${n} 조각)`, 'busy'));
+    const entry = { url, page: ids?ids.page:'', title, original: body, translated };
+    upsertChapter(entry);
+    currentUrl = url;
+    renderPage(entry);
+    setStatus('완료', 'ok');
+    if(!silent) toast('번역 완료: '+title);
+    saveLast();
+    return entry;
+  }catch(e){
+    console.error(e);
+    setStatus('오류: '+e.message, 'err');
+    toast('오류가 발생했습니다: '+e.message, 5000);
+    return null;
+  }finally{
+    setBusy(false);
+  }
+}
+
+function upsertChapter(entry){
+  const i = chapters.findIndex(c=>c.url===entry.url);
+  if(i>=0) chapters[i] = entry; else chapters.push(entry);
+  renderChapList();
+  persistChapters();
+}
+
+function renderPage(entry){
+  document.getElementById('pageTitle').textContent = entry.title || entry.url;
+  document.getElementById('pageRibbon').textContent = entry.page ? ('# '+entry.page) : '—';
+  const bodyEl = document.getElementById('pageBody');
+  const pageEl = document.getElementById('pageEl');
+  bodyEl.classList.remove('mono-empty');
+  if(currentView === 'split'){
+    pageEl.querySelector('.page-body') && (pageEl.querySelector('.page-body').style.display='none');
+    let splitDiv = pageEl.querySelector('.split');
+    if(!splitDiv){
+      splitDiv = document.createElement('div');
+      splitDiv.className = 'split';
+      pageEl.appendChild(splitDiv);
+    }
+    splitDiv.style.display = 'grid';
+    splitDiv.innerHTML = `
+      <div class="col"><h4>원문</h4><div style="white-space:pre-wrap;">${escapeHtml(entry.original)}</div></div>
+      <div class="col"><h4>번역</h4><div style="white-space:pre-wrap;">${escapeHtml(entry.translated)}</div></div>
+    `;
+  } else {
+    const splitDiv = pageEl.querySelector('.split');
+    if(splitDiv) splitDiv.style.display = 'none';
+    bodyEl.style.display = 'block';
+    bodyEl.textContent = currentView === 'original' ? entry.original : entry.translated;
+  }
+}
+
+function currentChapter(){ return chapters.find(c=>c.url===currentUrl); }
+
+/* =========================================================================
+   보관함 / 내보내기
+   ========================================================================= */
+function renderChapList(){
+  const ul = document.getElementById('chapList');
+  ul.innerHTML = chapters.map(c=>`
+    <li>
+      <span class="t" title="${escapeHtml(c.title)}">${c.page?('#'+c.page+' '):''}${escapeHtml(c.title||c.url)}</span>
+      <button class="x" data-remove="${encodeURIComponent(c.url)}" title="삭제">✕</button>
+    </li>
+  `).join('') || '<li style="color:#6d7568;">아직 불러온 화가 없습니다.</li>';
+}
+
+function exportAllTxt(){
+  if(!chapters.length){ toast('내보낼 내용이 없습니다.'); return; }
+  const sorted = [...chapters].sort((a,b)=>{
+    const pa = parseFloat(a.page), pb = parseFloat(b.page);
+    if(!isNaN(pa) && !isNaN(pb)) return pa-pb;
+    return 0;
+  });
+  const text = sorted.map(c=>`${'='.repeat(10)} ${c.title||c.url} ${'='.repeat(10)}\n\n${c.translated}\n`).join('\n\n');
+  const blob = new Blob([text], {type:'text/plain;charset=utf-8'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = (getProfile(currentProfileId)?.name || 'translation') + '.txt';
+  document.body.appendChild(a); a.click(); a.remove();
+}
+
+function persistChapters(){
+  if(!currentBookKey) return;
+  try{ localStorage.setItem('tr_book_'+currentBookKey, JSON.stringify(chapters)); }catch(e){}
+}
+function restoreChapters(){
+  if(!currentBookKey) return;
+  try{
+    const raw = localStorage.getItem('tr_book_'+currentBookKey);
+    chapters = raw ? JSON.parse(raw) : [];
+  }catch(e){ chapters = []; }
+  renderChapList();
+}
+
+function saveLast(){
+  localStorage.setItem(LS_LAST, JSON.stringify({profileId: currentProfileId, url: currentUrl}));
+}
+
+/* =========================================================================
+   URL 변경 / 이전-다음
+   ========================================================================= */
+function updateBookKey(url){
+  const profile = getProfile(currentProfileId);
+  if(!profile) { currentBookKey = null; return; }
+  const ids = extractIdAndPage(profile, url);
+  currentBookKey = profile.id + '::' + (ids ? (ids.id||'x') : 'x');
+}
+
+async function gotoPage(delta){
+  const profile = getProfile(currentProfileId);
+  if(!profile){ toast('사이트 유형을 먼저 선택하세요.'); return; }
+  const ids = extractIdAndPage(profile, currentUrl);
+  if(!ids){ toast('현재 URL에서 페이지 번호를 읽지 못했습니다.'); return; }
+  const nextPage = (parseInt(ids.page,10) + delta*profile.step);
+  if(nextPage < 1){ toast('첫 화입니다.'); return; }
+  const nextUrl = buildUrlForPage(profile, ids.id, nextPage);
+  document.getElementById('urlInput').value = nextUrl;
+  await loadAndTranslate(nextUrl);
+}
+
+async function batchContinue(){
+  const n = Math.max(1, parseInt(document.getElementById('batchCount').value,10)||1);
+  const profile = getProfile(currentProfileId);
+  if(!profile || !currentUrl){ toast('먼저 한 화를 불러오세요.'); return; }
+  let url = currentUrl;
+  for(let i=0;i<n;i++){
+    const ids = extractIdAndPage(profile, url);
+    if(!ids) break;
+    const entry = await loadAndTranslate(url, {silent:true});
+    if(!entry) break;
+    toast(`(${i+1}/${n}) 완료: ${entry.title}`, 1500);
+    const nextPage = parseInt(ids.page,10) + profile.step;
+    url = buildUrlForPage(profile, ids.id, nextPage);
+    await sleep(400);
+  }
+  document.getElementById('urlInput').value = url;
+  toast('이어받기 종료. 보관함에서 확인하세요.');
+}
+
+/* =========================================================================
+   UI 이벤트 바인딩
+   ========================================================================= */
+document.getElementById('loadBtn').onclick = async ()=>{
+  const url = document.getElementById('urlInput').value.trim();
+  if(!url){ toast('URL을 입력하세요.'); return; }
+  const profile = matchProfileForUrl(url);
+  if(profile){ currentProfileId = profile.id; renderProfileSelect(); renderProfileSummary(); }
+  updateBookKey(url);
+  restoreChapters();
+  await loadAndTranslate(url);
+};
+
+function matchProfileForUrl(url){
+  try{
+    const u = new URL(url);
+    return profiles.find(p=>p.hostname === u.hostname) || getProfile(currentProfileId);
+  }catch(e){ return getProfile(currentProfileId); }
+}
+
+document.getElementById('prevBtn').onclick = ()=>gotoPage(-1);
+document.getElementById('nextBtn').onclick = ()=>gotoPage(1);
+document.getElementById('prevBtn2').onclick = ()=>gotoPage(-1);
+document.getElementById('nextBtn2').onclick = ()=>gotoPage(1);
+document.getElementById('translateBtn').onclick = ()=>{ if(currentUrl) loadAndTranslate(currentUrl); };
+document.getElementById('batchBtn').onclick = batchContinue;
+document.getElementById('exportBtn').onclick = exportAllTxt;
+document.getElementById('clearBtn').onclick = ()=>{
+  if(confirm('현재 작품의 보관함을 비울까요?')){ chapters=[]; renderChapList(); persistChapters(); }
+};
+document.getElementById('chapList').addEventListener('click', (e)=>{
+  const btn = e.target.closest('[data-remove]');
+  if(!btn) return;
+  const url = decodeURIComponent(btn.getAttribute('data-remove'));
+  chapters = chapters.filter(c=>c.url!==url);
+  renderChapList(); persistChapters();
+});
+
+document.querySelectorAll('.viewtabs button').forEach(b=>{
+  b.onclick = ()=>{
+    document.querySelectorAll('.viewtabs button').forEach(x=>x.classList.remove('active'));
+    b.classList.add('active');
+    currentView = b.dataset.view;
+    const c = currentChapter();
+    if(c) renderPage(c);
+  };
+});
+
+document.getElementById('profileSelect').onchange = (e)=>{
+  if(e.target.value === '__new__'){
+    openSiteModal(null);
+    renderProfileSelect(); // reset selection visually
+    e.target.value = currentProfileId || '';
+    return;
+  }
+  currentProfileId = e.target.value;
+  renderProfileSummary();
+};
+
+document.getElementById('siteBtn').onclick = ()=>openSiteModal(getProfile(currentProfileId));
+document.getElementById('editProfileBtn').onclick = ()=>openSiteModal(getProfile(currentProfileId));
+document.getElementById('settingsBtn').onclick = ()=>{ document.getElementById('settingsModal').classList.add('show'); };
+
+document.querySelectorAll('[data-close]').forEach(el=>{
+  el.addEventListener('click', ()=>{
+    document.getElementById(el.getAttribute('data-close')).classList.remove('show');
+  });
+});
+
+/* ---- settings modal wiring ---- */
+document.getElementById('apiKeys').addEventListener('change', (e)=>{
+  memory.apiKeys = e.target.value.split('\n').map(s=>s.trim()).filter(Boolean);
+  memory.keyIndex = 0; geminiExhausted = false;
+});
+document.getElementById('geminiModel').addEventListener('change', e=>{ memory.geminiModel = e.target.value.trim() || 'gemini-2.5-flash'; });
+document.getElementById('targetLang').addEventListener('change', e=>{
+  memory.targetLang = e.target.value;
+  memory.targetLangName = LANG_NAMES[e.target.value] || e.target.value;
+});
+document.getElementById('corsProxy').addEventListener('change', e=>{
+  const v = e.target.value;
+  const customInput = document.getElementById('corsProxyCustom');
+  if(v === 'custom'){ customInput.style.display='block'; memory.corsProxyTemplate = customInput.value.trim(); }
+  else { customInput.style.display='none'; memory.corsProxyTemplate = v; }
+});
+document.getElementById('corsProxyCustom').addEventListener('change', e=>{ memory.corsProxyTemplate = e.target.value.trim(); });
+
+/* =========================================================================
+   사이트 등록 모달
+   ========================================================================= */
+let siteModalCands = null;
+let siteModalUrl = null;
+let idPick = null, pagePick = null;
+let editingProfileId = null;
+
+function openSiteModal(profile){
+  editingProfileId = profile ? profile.id : null;
+  document.getElementById('siteModalTitle').textContent = profile ? '사이트 유형 편집' : '사이트 유형 등록';
+  document.getElementById('sampleUrl').value = profile ? buildUrlForPage(profile, '123', '1') : (document.getElementById('urlInput').value || '');
+  document.getElementById('profName').value = profile ? profile.name : '';
+  document.getElementById('profStep').value = profile ? profile.step : 1;
+  document.getElementById('profMode').value = profile ? profile.mode : 'reader';
+  document.getElementById('profContentSel').value = profile ? profile.contentSel : '';
+  document.getElementById('profTitleSel').value = profile ? profile.titleSel : '';
+  document.getElementById('profRemoveSel').value = profile ? profile.removeSel : 'script, style, nav, header, footer, form';
+  document.getElementById('candWrap').style.display = 'none';
+  document.getElementById('deleteProfBtn').style.display = profile ? 'inline-block' : 'none';
+  toggleSelectorFields();
+  siteModalCands = null; idPick = null; pagePick = null;
+  document.getElementById('siteModal').classList.add('show');
+}
+
+function toggleSelectorFields(){
+  document.getElementById('selectorFields').style.display =
+    document.getElementById('profMode').value === 'selector' ? 'block' : 'none';
+}
+document.getElementById('profMode').addEventListener('change', toggleSelectorFields);
+
+document.getElementById('analyzeBtn').onclick = ()=>{
+  const raw = document.getElementById('sampleUrl').value.trim();
+  const result = analyzeUrl(raw);
+  if(!result || !result.cands.length){ toast('URL에서 숫자를 찾지 못했습니다. 직접 입력한 URL 구조를 확인하세요.'); return; }
+  siteModalUrl = result.url;
+  siteModalCands = result.cands;
+  idPick = null; pagePick = null;
+  renderCandList();
+  document.getElementById('candWrap').style.display = 'block';
+};
+
+function renderCandList(){
+  const wrap = document.getElementById('candList');
+  wrap.innerHTML = siteModalCands.map((c,i)=>`
+    <span class="cand" data-i="${i}">
+      ${escapeHtml(c.label)}
+      <button class="role-btn ${idPick===c?'on-id':''}" data-role="id" data-i="${i}">ID</button>
+      <button class="role-btn ${pagePick===c?'on-page':''}" data-role="page" data-i="${i}">페이지</button>
+    </span>
+  `).join('');
+}
+document.getElementById('candList').addEventListener('click', (e)=>{
+  const btn = e.target.closest('.role-btn');
+  if(!btn) return;
+  const i = Number(btn.getAttribute('data-i'));
+  const role = btn.getAttribute('data-role');
+  const c = siteModalCands[i];
+  if(role==='id') idPick = (idPick===c) ? null : c;
+  if(role==='page') pagePick = (pagePick===c) ? null : c;
+  renderCandList();
+});
+
+document.getElementById('saveProfBtn').onclick = ()=>{
+  const mode = document.getElementById('profMode').value;
+  const name = document.getElementById('profName').value.trim();
+  const step = document.getElementById('profStep').value;
+  const contentSel = document.getElementById('profContentSel').value.trim();
+  const titleSel = document.getElementById('profTitleSel').value.trim();
+  const removeSel = document.getElementById('profRemoveSel').value.trim();
+
+  let profile;
+  if(siteModalUrl && pagePick){
+    profile = buildProfileFromChoice(siteModalUrl, siteModalCands, idPick, pagePick, name, step, mode, contentSel, titleSel, removeSel);
+  } else if(editingProfileId){
+    // editing existing without re-analyzing: just update the meta fields
+    profile = getProfile(editingProfileId);
+    profile.name = name || profile.name;
+    profile.step = Number(step)||1;
+    profile.mode = mode;
+    profile.contentSel = contentSel;
+    profile.titleSel = titleSel;
+    profile.removeSel = removeSel;
+  } else {
+    toast('URL을 분석하고 페이지 번호 역할을 지정해주세요.');
+    return;
+  }
+  if(!profile){ toast('페이지 위치를 지정해야 저장할 수 있습니다.'); return; }
+
+  if(editingProfileId){
+    const idx = profiles.findIndex(p=>p.id===editingProfileId);
+    profile.id = editingProfileId;
+    if(idx>=0) profiles[idx] = profile; else profiles.push(profile);
+  } else {
+    profiles.push(profile);
+  }
+  saveProfiles();
+  currentProfileId = profile.id;
+  renderProfileSelect();
+  renderProfileSummary();
+  document.getElementById('siteModal').classList.remove('show');
+  toast('사이트 유형이 저장되었습니다: '+profile.name);
+};
+
+document.getElementById('deleteProfBtn').onclick = ()=>{
+  if(!editingProfileId) return;
+  if(!confirm('이 사이트 유형을 삭제할까요?')) return;
+  profiles = profiles.filter(p=>p.id!==editingProfileId);
+  if(!profiles.length) profiles = defaultProfiles();
+  saveProfiles();
+  currentProfileId = profiles[0].id;
+  renderProfileSelect();
+  renderProfileSummary();
+  document.getElementById('siteModal').classList.remove('show');
+};
+
+function renderProfileSummary(){
+  document.getElementById('profileSummary').innerHTML = profileSummaryHtml(getProfile(currentProfileId));
+}
+
+/* =========================================================================
+   초기화
+   ========================================================================= */
+(function init(){
+  loadProfiles();
+  let last = null;
+  try{ last = JSON.parse(localStorage.getItem(LS_LAST) || 'null'); }catch(e){}
+  currentProfileId = (last && getProfile(last.profileId)) ? last.profileId : profiles[0].id;
+  renderProfileSelect();
+  renderProfileSummary();
+  memory.targetLangName = LANG_NAMES[memory.targetLang];
+  if(last && last.url){
+    document.getElementById('urlInput').value = last.url;
+    currentUrl = last.url;
+    updateBookKey(last.url);
+    restoreChapters();
+    const existing = chapters.find(c=>c.url===last.url);
+    if(existing) renderPage(existing);
+  }
+})();
+</script>
+</body>
+</html>
