@@ -195,6 +195,7 @@ a{color:var(--brass-soft);}
       <button class="btn" id="nextBtn">다음화 →</button>
       <span class="status-line"><span class="dot" id="statusDot"></span><span id="statusText">대기 중</span></span>
     </div>
+    <div id="lastErrorLine" style="display:none;font-size:11.5px;color:var(--seal);margin:-8px 0 12px;"></div>
 
     <div class="page-wrap">
       <div class="viewtabs">
@@ -245,12 +246,17 @@ a{color:var(--brass-soft);}
   <div class="modal">
     <button class="modal-close" data-close="settingsModal">✕</button>
     <h2>번역 설정</h2>
-    <div class="sub">API 키는 저장되지 않고 <b>브라우저 메모리에만</b> 유지됩니다. 새로고침하면 다시 입력해야 합니다.</div>
+    <div class="sub">API 키는 <b>이 브라우저의 로컬 저장소</b>에만 저장됩니다 (다른 서버로 전송되지 않음). 새로고침해도 유지되며, 원치 않으면 아래 "키 지우기"로 즉시 삭제할 수 있습니다.</div>
 
     <div class="field">
       <label>Google AI Studio(Gemini) API 키 — 한 줄에 하나씩, 여러 개 입력 가능</label>
       <textarea id="apiKeys" placeholder="AIzaSy...&#10;AIzaSy...&#10;AIzaSy..."></textarea>
-      <div class="hint">첫 번째 키가 실패(할당량 초과·오류)하면 다음 키로 자동 전환됩니다. 모든 키가 실패하면 <b>구글 번역</b>으로 자동 대체됩니다. 키를 하나도 입력하지 않으면 처음부터 구글 번역만 사용합니다.</div>
+      <div class="row" style="margin-top:6px;">
+        <button class="btn small-btn" id="testKeysBtn">키 테스트</button>
+        <button class="btn small-btn" id="clearKeysBtn">키 지우기</button>
+      </div>
+      <div class="hint">첫 번째 키가 실패(할당량 초과·오류)하면 다음 키로 자동 전환됩니다. 모든 키가 실패하면 <b>구글 번역</b>으로 자동 대체됩니다. 키를 하나도 입력하지 않으면 처음부터 구글 번역만 사용합니다. <b>키 테스트</b>를 누르면 실제 오류 메시지(권한 없음, 모델 없음, 할당량 초과 등)를 바로 확인할 수 있습니다.</div>
+      <div id="keyTestResult" style="display:none;font-family:'IBM Plex Mono',monospace;font-size:11px;background:#151915;border:1px solid #3a4139;border-radius:4px;padding:8px;margin-top:8px;white-space:pre-wrap;max-height:140px;overflow-y:auto;"></div>
     </div>
     <div class="two-col">
       <div class="field">
@@ -362,6 +368,11 @@ const memory = {
 
 const LS_PROFILES = 'tr_profiles_v1';
 const LS_LAST = 'tr_last_v1';
+const LS_SETTINGS = 'tr_settings_v1';
+const PROXY_FALLBACKS = [
+  'https://api.allorigins.win/raw?url={url}',
+  'https://corsproxy.io/?url={url}'
+];
 
 let profiles = [];
 let currentProfileId = null;
@@ -441,6 +452,88 @@ function setStatus(text, kind){
   dot.className = 'dot' + (kind ? ' '+kind : '');
 }
 function setBusy(v){ busy = v; document.querySelectorAll('.btn').forEach(b=>{ if(v) b.setAttribute('data-was-disabled', b.disabled?'1':'0'); }); }
+
+let lastErrorDetail = '';
+function setLastError(msg){
+  lastErrorDetail = msg || '';
+  const el = document.getElementById('lastErrorLine');
+  if(!el) return;
+  if(lastErrorDetail){ el.style.display='block'; el.textContent = '마지막 오류: '+lastErrorDetail; }
+  else el.style.display='none';
+}
+
+/* =========================================================================
+   설정 읽기/저장 (DOM이 항상 source of truth, localStorage에 자동 동기화)
+   ========================================================================= */
+function readSettingsFromDom(){
+  const apiKeys = document.getElementById('apiKeys').value.split('\n').map(s=>s.trim()).filter(Boolean);
+  const geminiModel = document.getElementById('geminiModel').value.trim() || 'gemini-2.5-flash';
+  const targetLang = document.getElementById('targetLang').value;
+  const proxySel = document.getElementById('corsProxy').value;
+  const corsProxyTemplate = proxySel === 'custom'
+    ? (document.getElementById('corsProxyCustom').value.trim() || PROXY_FALLBACKS[0])
+    : proxySel;
+  return {
+    apiKeys, geminiModel, targetLang,
+    targetLangName: LANG_NAMES[targetLang] || targetLang,
+    corsProxyTemplate
+  };
+}
+
+function syncSettings(){
+  const s = readSettingsFromDom();
+  Object.assign(memory, s);
+  try{
+    localStorage.setItem(LS_SETTINGS, JSON.stringify({
+      apiKeys: s.apiKeys,
+      geminiModel: s.geminiModel,
+      targetLang: s.targetLang,
+      corsProxySel: document.getElementById('corsProxy').value,
+      corsProxyCustom: document.getElementById('corsProxyCustom').value
+    }));
+  }catch(e){ console.warn('설정 저장 실패', e); }
+  return s;
+}
+
+function restoreSettingsToDom(){
+  let saved = null;
+  try{ saved = JSON.parse(localStorage.getItem(LS_SETTINGS) || 'null'); }catch(e){}
+  if(!saved) return;
+  if(saved.apiKeys && saved.apiKeys.length) document.getElementById('apiKeys').value = saved.apiKeys.join('\n');
+  if(saved.geminiModel) document.getElementById('geminiModel').value = saved.geminiModel;
+  if(saved.targetLang) document.getElementById('targetLang').value = saved.targetLang;
+  if(saved.corsProxySel){
+    const sel = document.getElementById('corsProxy');
+    if([...sel.options].some(o=>o.value===saved.corsProxySel)) sel.value = saved.corsProxySel;
+  }
+  if(saved.corsProxyCustom){
+    document.getElementById('corsProxyCustom').value = saved.corsProxyCustom;
+    if(document.getElementById('corsProxy').value === 'custom'){
+      document.getElementById('corsProxyCustom').style.display = 'block';
+    }
+  }
+}
+
+/* CORS 프록시 여러 개를 순서대로 시도 (하나 실패하면 다음 프록시로) */
+async function fetchWithProxyFallback(targetUrl){
+  const primary = memory.corsProxyTemplate || PROXY_FALLBACKS[0];
+  const list = [primary, ...PROXY_FALLBACKS.filter(p=>p!==primary)];
+  const tried = [];
+  for(const tpl of list){
+    try{
+      const full = tpl.replace('{url}', encodeURIComponent(targetUrl));
+      const res = await fetch(full);
+      if(!res.ok){ tried.push(hostOf(tpl)+': HTTP '+res.status); continue; }
+      const text = await res.text();
+      if(!text || !text.trim()){ tried.push(hostOf(tpl)+': 빈 응답'); continue; }
+      return text;
+    }catch(e){
+      tried.push(hostOf(tpl)+': '+e.message);
+    }
+  }
+  throw new Error('모든 프록시 실패 — ' + tried.join(' / '));
+}
+function hostOf(tpl){ try{ return new URL(tpl.split('{url}')[0]).hostname; }catch(e){ return tpl.slice(0,20); } }
 
 /* =========================================================================
    URL 분석 (사이트 등록용)
@@ -526,52 +619,59 @@ function extractIdAndPage(profile, urlStr){
 /* =========================================================================
    본문 가져오기 + 추출
    ========================================================================= */
-function proxied(url){
-  const tpl = memory.corsProxyTemplate;
-  return tpl.replace('{url}', encodeURIComponent(url));
+async function fetchViaReader(url){
+  const readerUrl = 'https://r.jina.ai/' + url;
+  const res = await fetch(readerUrl);
+  if(!res.ok) throw new Error('리더 프록시(r.jina.ai) 오류: HTTP '+res.status);
+  let text = await res.text();
+  let title = '';
+  const m = text.match(/^Title:\s*(.+)\n/);
+  if(m){ title = m[1].trim(); }
+  const idx = text.indexOf('Markdown Content:');
+  if(idx !== -1) text = text.slice(idx + 'Markdown Content:'.length);
+  text = text.trim();
+  if(!text) throw new Error('리더 프록시가 빈 본문을 반환했습니다.');
+  return { title: title || url, body: text };
+}
+
+async function fetchViaSelector(profile, url){
+  const html = await fetchWithProxyFallback(url);
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+  (profile.removeSel||'').split(',').map(s=>s.trim()).filter(Boolean).forEach(sel=>{
+    doc.querySelectorAll(sel).forEach(el=>el.remove());
+  });
+  let title = '';
+  if(profile.titleSel){
+    const te = doc.querySelector(profile.titleSel);
+    if(te) title = te.textContent.trim();
+  }
+  if(!title){
+    const te = doc.querySelector('title');
+    title = te ? te.textContent.trim() : url;
+  }
+  let bodyEl = null;
+  if(profile.contentSel){
+    bodyEl = doc.querySelector(profile.contentSel);
+    if(!bodyEl) console.warn('지정한 선택자를 찾지 못해 자동 감지로 전환:', profile.contentSel);
+  }
+  if(!bodyEl){
+    bodyEl = autoDetectContent(doc);
+  }
+  const body = bodyEl ? cleanBlockText(bodyEl) : '';
+  if(!body) throw new Error('본문을 찾지 못했습니다. 사이트 유형에서 CSS 선택자를 직접 지정해 보세요.');
+  return { title, body };
 }
 
 async function fetchChapter(profile, url){
   if(profile.mode === 'reader'){
-    const readerUrl = 'https://r.jina.ai/' + url;
-    const res = await fetch(readerUrl);
-    if(!res.ok) throw new Error('리더 프록시 오류: HTTP '+res.status);
-    let text = await res.text();
-    // r.jina.ai prefixes with Title:/URL Source:/Markdown Content: — split those out
-    let title = '';
-    const m = text.match(/^Title:\s*(.+)\n/);
-    if(m){ title = m[1].trim(); }
-    const idx = text.indexOf('Markdown Content:');
-    if(idx !== -1) text = text.slice(idx + 'Markdown Content:'.length);
-    text = text.trim();
-    return { title: title || url, body: text };
+    try{
+      return await fetchViaReader(url);
+    }catch(e){
+      console.warn('리더 프록시 실패, 선택자/자동감지 방식으로 재시도:', e.message);
+      return await fetchViaSelector(profile, url);
+    }
   } else {
-    const fetchUrl = proxied(url);
-    const res = await fetch(fetchUrl);
-    if(!res.ok) throw new Error('가져오기 오류: HTTP '+res.status);
-    const html = await res.text();
-    const doc = new DOMParser().parseFromString(html, 'text/html');
-    (profile.removeSel||'').split(',').map(s=>s.trim()).filter(Boolean).forEach(sel=>{
-      doc.querySelectorAll(sel).forEach(el=>el.remove());
-    });
-    let title = '';
-    if(profile.titleSel){
-      const te = doc.querySelector(profile.titleSel);
-      if(te) title = te.textContent.trim();
-    }
-    if(!title){
-      const te = doc.querySelector('title');
-      title = te ? te.textContent.trim() : url;
-    }
-    let bodyEl = null;
-    if(profile.contentSel){
-      bodyEl = doc.querySelector(profile.contentSel);
-    }
-    if(!bodyEl){
-      bodyEl = autoDetectContent(doc);
-    }
-    const body = bodyEl ? cleanBlockText(bodyEl) : '(본문을 찾지 못했습니다. 사이트 유형에서 선택자를 지정해 보세요.)';
-    return { title, body };
+    return await fetchViaSelector(profile, url);
   }
 }
 
@@ -649,9 +749,10 @@ async function translateChunkGoogle(chunk){
   const parts = [];
   for(const s of subs){
     const gurl = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=${encodeURIComponent(memory.targetLang)}&dt=t&q=${encodeURIComponent(s)}`;
-    const res = await fetch(proxied(gurl));
-    if(!res.ok) throw new Error('Google 번역 HTTP '+res.status);
-    const data = await res.json();
+    const raw = await fetchWithProxyFallback(gurl);
+    let data;
+    try{ data = JSON.parse(raw); }
+    catch(e){ throw new Error('구글 번역 응답을 해석하지 못했습니다 (프록시가 다른 내용을 반환했을 수 있음)'); }
     const seg = (data[0]||[]).map(x=>x[0]).join('');
     parts.push(seg);
     await sleep(180);
@@ -664,8 +765,11 @@ function sleep(ms){ return new Promise(r=>setTimeout(r,ms)); }
 let geminiExhausted = false;
 
 async function translateFullText(text, onProgress){
+  syncSettings();
+  geminiExhausted = false; // 새 번역마다 Gemini를 다시 시도
   const chunks = chunkText(text);
   const out = [];
+  const keyErrors = [];
   for(let i=0;i<chunks.length;i++){
     onProgress && onProgress(i, chunks.length);
     let done = false;
@@ -678,23 +782,33 @@ async function translateFullText(text, onProgress){
           done = true;
           break;
         }catch(e){
-          console.warn('Gemini key failed, rotating:', e.message);
+          const short = maskKey(key) + ': ' + e.message;
+          console.warn('Gemini 키 실패, 다음 키로 전환 →', short);
+          keyErrors.push(short);
           memory.keyIndex = (memory.keyIndex+1) % memory.apiKeys.length;
         }
       }
       if(!done){
         geminiExhausted = true;
-        toast('모든 Gemini 키가 실패해 구글 번역으로 전환합니다.');
+        setLastError('Gemini 키 전부 실패 → ' + keyErrors.slice(-3).join(' | '));
+        toast('모든 Gemini 키가 실패해 구글 번역으로 전환합니다. (상세: 하단 오류 로그 참고)', 4500);
       }
     }
     if(!done){
-      const t = await translateChunkGoogle(chunks[i]);
-      out.push(t);
+      try{
+        const t = await translateChunkGoogle(chunks[i]);
+        out.push(t);
+      }catch(e){
+        setLastError('구글 번역도 실패 → ' + e.message);
+        throw new Error('Gemini와 구글 번역 모두 실패했습니다: ' + e.message);
+      }
     }
   }
   onProgress && onProgress(chunks.length, chunks.length);
   return out.join('\n\n');
 }
+
+function maskKey(k){ return k.length>8 ? k.slice(0,4)+'…'+k.slice(-4) : k; }
 
 /* =========================================================================
    메인 로딩 흐름
@@ -702,6 +816,8 @@ async function translateFullText(text, onProgress){
 async function loadAndTranslate(url, {silent}={}){
   const profile = getProfile(currentProfileId);
   if(!profile){ toast('먼저 사이트 유형을 선택하거나 등록하세요.'); return null; }
+  syncSettings();
+  setLastError('');
   setBusy(true);
   setStatus('본문 가져오는 중…', 'busy');
   try{
@@ -719,8 +835,9 @@ async function loadAndTranslate(url, {silent}={}){
     return entry;
   }catch(e){
     console.error(e);
-    setStatus('오류: '+e.message, 'err');
-    toast('오류가 발생했습니다: '+e.message, 5000);
+    setStatus('오류', 'err');
+    setLastError(e.message);
+    toast('오류가 발생했습니다: '+e.message, 6000);
     return null;
   }finally{
     setBusy(false);
@@ -918,23 +1035,45 @@ document.querySelectorAll('[data-close]').forEach(el=>{
   });
 });
 
-/* ---- settings modal wiring ---- */
-document.getElementById('apiKeys').addEventListener('change', (e)=>{
-  memory.apiKeys = e.target.value.split('\n').map(s=>s.trim()).filter(Boolean);
-  memory.keyIndex = 0; geminiExhausted = false;
-});
-document.getElementById('geminiModel').addEventListener('change', e=>{ memory.geminiModel = e.target.value.trim() || 'gemini-2.5-flash'; });
-document.getElementById('targetLang').addEventListener('change', e=>{
-  memory.targetLang = e.target.value;
-  memory.targetLangName = LANG_NAMES[e.target.value] || e.target.value;
-});
+/* ---- settings modal wiring ----
+   DOM은 항상 source of truth. 입력이 있을 때마다(스크롤/타이핑 포함) memory + localStorage에
+   즉시 동기화하므로, '변경 이벤트를 놓쳐서 키가 비어있는' 상황이 생기지 않는다. */
+document.getElementById('settingsModal').addEventListener('input', ()=>{ syncSettings(); });
 document.getElementById('corsProxy').addEventListener('change', e=>{
-  const v = e.target.value;
   const customInput = document.getElementById('corsProxyCustom');
-  if(v === 'custom'){ customInput.style.display='block'; memory.corsProxyTemplate = customInput.value.trim(); }
-  else { customInput.style.display='none'; memory.corsProxyTemplate = v; }
+  customInput.style.display = (e.target.value === 'custom') ? 'block' : 'none';
+  syncSettings();
 });
-document.getElementById('corsProxyCustom').addEventListener('change', e=>{ memory.corsProxyTemplate = e.target.value.trim(); });
+document.getElementById('settingsBtn').addEventListener('click', ()=>{
+  // 모달을 열 때도 현재 DOM 값을 memory에 반영해 최신 상태를 보장
+  syncSettings();
+}, {capture:true});
+
+document.getElementById('testKeysBtn').onclick = async ()=>{
+  syncSettings();
+  const out = document.getElementById('keyTestResult');
+  out.style.display = 'block';
+  if(!memory.apiKeys.length){ out.textContent = '입력된 키가 없습니다. 붙여넣은 뒤 다시 눌러보세요.'; return; }
+  out.textContent = '테스트 중…';
+  const lines = [];
+  for(let i=0;i<memory.apiKeys.length;i++){
+    const key = memory.apiKeys[i];
+    try{
+      await translateChunkGemini('테스트 문장입니다. (test)', key);
+      lines.push(`✅ 키 ${i+1} (${maskKey(key)}): 정상 작동`);
+    }catch(e){
+      lines.push(`❌ 키 ${i+1} (${maskKey(key)}): ${e.message}`);
+    }
+    out.textContent = lines.join('\n');
+  }
+};
+document.getElementById('clearKeysBtn').onclick = ()=>{
+  if(!confirm('저장된 API 키를 이 브라우저에서 삭제할까요?')) return;
+  document.getElementById('apiKeys').value = '';
+  document.getElementById('keyTestResult').style.display = 'none';
+  syncSettings();
+  toast('API 키를 삭제했습니다.');
+};
 
 /* =========================================================================
    사이트 등록 모달
@@ -1061,12 +1200,13 @@ function renderProfileSummary(){
    ========================================================================= */
 (function init(){
   loadProfiles();
+  restoreSettingsToDom();
+  syncSettings();
   let last = null;
   try{ last = JSON.parse(localStorage.getItem(LS_LAST) || 'null'); }catch(e){}
   currentProfileId = (last && getProfile(last.profileId)) ? last.profileId : profiles[0].id;
   renderProfileSelect();
   renderProfileSummary();
-  memory.targetLangName = LANG_NAMES[memory.targetLang];
   if(last && last.url){
     document.getElementById('urlInput').value = last.url;
     currentUrl = last.url;
