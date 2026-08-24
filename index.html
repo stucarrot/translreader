@@ -778,16 +778,48 @@ async function translateChunkGemini(chunk, key){
   return cand.content.parts.map(p=>p.text||'').join('').trim();
 }
 
+async function fetchTextDirectOrProxy(targetUrl){
+  const attempts = [];
+  // 1) 프록시 없이 직접 시도 (translate.googleapis.com은 환경에 따라 직접 호출이 되기도 함)
+  try{
+    const res = await fetch(targetUrl);
+    if(res.ok){
+      const text = await res.text();
+      if(text && text.trim()) return text;
+      attempts.push('직접 호출: 빈 응답');
+    } else {
+      attempts.push('직접 호출: HTTP '+res.status);
+    }
+  }catch(e){
+    attempts.push('직접 호출: '+e.message);
+  }
+  // 2) 프록시 체인
+  try{
+    return await fetchWithProxyFallback(targetUrl);
+  }catch(e){
+    throw new Error(attempts.join(' / ') + ' / ' + e.message);
+  }
+}
+
 async function translateChunkGoogle(chunk){
   // google translate free endpoint has practical URL length limits; sub-chunk further
   const subs = chunkText(chunk, 700);
   const parts = [];
-  for(const s of subs){
+  for(let i=0;i<subs.length;i++){
+    const s = subs[i];
     const gurl = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=${encodeURIComponent(memory.targetLang)}&dt=t&q=${encodeURIComponent(s)}`;
-    const raw = await fetchWithProxyFallback(gurl);
+    let raw;
+    try{
+      raw = await fetchTextDirectOrProxy(gurl);
+    }catch(e){
+      throw new Error(`구글 번역 조각 ${i+1}/${subs.length} 실패 → ${e.message}`);
+    }
     let data;
     try{ data = JSON.parse(raw); }
-    catch(e){ throw new Error('구글 번역 응답을 해석하지 못했습니다 (프록시가 다른 내용을 반환했을 수 있음)'); }
+    catch(e){
+      const snippet = raw.slice(0,120).replace(/\s+/g,' ');
+      throw new Error(`구글 번역 응답이 JSON이 아님 (조각 ${i+1}/${subs.length}): "${snippet}..."`);
+    }
     const seg = (data[0]||[]).map(x=>x[0]).join('');
     parts.push(seg);
     await sleep(180);
