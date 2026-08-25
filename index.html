@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>번역 리더 — 사이트 등록형 소설 번역 뷰어</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -22,11 +22,12 @@
   --text-dim:#8a9186;
   --radius:3px;
   --shadow-page: 0 1px 0 rgba(0,0,0,.03), 0 12px 30px -14px rgba(0,0,0,.45);
+  --bottombar-h:58px;
   font-family:'IBM Plex Sans KR',system-ui,sans-serif;
 }
 *{box-sizing:border-box;}
-html,body{margin:0;padding:0;height:100%;background:var(--ink);color:var(--paper);}
-body{display:flex;flex-direction:column;min-height:100vh;}
+html,body{margin:0;padding:0;background:var(--ink);color:var(--paper);}
+body{min-height:100vh;}
 ::selection{background:var(--brass-soft);color:var(--ink);}
 button{font-family:inherit;cursor:pointer;}
 input,select,textarea{font-family:inherit;}
@@ -51,10 +52,11 @@ a{color:var(--brass-soft);}
 .brand-name{font-family:'Newsreader',serif;font-size:17px;letter-spacing:.02em;color:var(--paper);white-space:nowrap;}
 .brand-name em{color:var(--brass-soft);font-style:normal;}
 
+.controls-group{display:flex;gap:8px;align-items:center;flex:1;flex-wrap:wrap;min-width:0;}
 .urlbar{
-  flex:1 1 320px;display:flex;gap:6px;align-items:center;
+  flex:1 1 280px;display:flex;gap:6px;align-items:center;
   background:#151915;border:1px solid #3a4139;border-radius:var(--radius);
-  padding:4px 4px 4px 10px;
+  padding:4px 4px 4px 10px;min-width:0;
 }
 .urlbar input{
   flex:1;background:transparent;border:none;outline:none;color:var(--paper);
@@ -72,27 +74,34 @@ a{color:var(--brass-soft);}
 .btn-primary:hover{background:#b8453b;}
 .btn-ghost{background:transparent;border-color:transparent;}
 .btn-ghost:hover{background:#232920;}
-.btn-icon{padding:7px 9px;font-size:14px;line-height:1;}
+.btn-icon{padding:7px 9px;font-size:14px;line-height:1;flex-shrink:0;}
 
 .profile-select{
   background:#151915;border:1px solid #3a4139;color:var(--paper);
-  border-radius:var(--radius);padding:7px 8px;font-size:12.5px;max-width:150px;
+  border-radius:var(--radius);padding:7px 8px;font-size:12.5px;max-width:150px;flex-shrink:0;
 }
 
 /* ---------- layout ---------- */
-.layout{flex:1;display:flex;min-height:0;}
-.main{flex:1;display:flex;flex-direction:column;min-width:0;padding:22px 22px 0;overflow-y:auto;}
+.layout{display:flex;align-items:flex-start;}
+.main{flex:1;display:flex;flex-direction:column;min-width:0;padding:22px 22px 40px;}
 .side{
   width:290px;flex-shrink:0;background:var(--ink-2);border-left:1px solid #000;
-  padding:16px 14px;overflow-y:auto;
+  padding:16px 14px;align-self:stretch;
 }
+#sitePanel{display:none;padding:16px;}
 @media (max-width:880px){
   .layout{flex-direction:column;}
   .side{width:100%;border-left:none;border-top:1px solid #000;}
 }
 
+/* ---------- progress bar ---------- */
+.progress-track{height:5px;background:#232920;border-radius:3px;overflow:hidden;margin:0 0 12px;display:none;}
+.progress-fill{height:100%;background:linear-gradient(90deg,var(--brass),var(--seal));width:0%;transition:width .25s ease;}
+.progress-fill.indeterminate{width:38%!important;animation:indet 1.05s infinite linear;background:linear-gradient(90deg,transparent,var(--brass-soft),transparent);}
+@keyframes indet{0%{margin-left:-40%;}100%{margin-left:100%;}}
+
 /* ---------- chapter strip ---------- */
-.navstrip{display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap;}
+.navstrip{display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap;}
 .ribbon{
   background:var(--brass);color:#2b2107;font-family:'IBM Plex Mono',monospace;
   font-size:12px;font-weight:600;padding:5px 10px 5px 8px;border-radius:2px 2px 2px 8px;
@@ -106,7 +115,7 @@ a{color:var(--brass-soft);}
 @keyframes pulse{0%,100%{opacity:.3}50%{opacity:1}}
 
 /* ---------- page (reading pane) ---------- */
-.page-wrap{flex:1;display:flex;flex-direction:column;padding-bottom:26px;}
+.page-wrap{flex:1;display:flex;flex-direction:column;}
 .viewtabs{display:flex;gap:2px;margin-bottom:0;}
 .viewtabs button{
   background:#232920;color:var(--text-dim);border:1px solid #000;border-bottom:none;
@@ -116,9 +125,9 @@ a{color:var(--brass-soft);}
 .page{
   background:var(--paper);color:var(--ink);border-radius:0 6px 6px 6px;
   box-shadow:var(--shadow-page);
-  padding:38px 42px 48px;flex:1;min-height:300px;
+  padding:32px 30px 40px;flex:1;min-height:260px;
 }
-.page-title{font-family:'Newsreader',serif;font-size:22px;margin:0 0 22px;color:#2b2718;border-bottom:1px solid var(--paper-line);padding-bottom:14px;}
+.page-title{font-family:'Newsreader',serif;font-size:21px;margin:0 0 20px;color:#2b2718;border-bottom:1px solid var(--paper-line);padding-bottom:14px;}
 .page-body{font-family:'Newsreader',serif;font-size:18px;line-height:1.9;color:#2a2a20;white-space:pre-wrap;}
 .page-body.mono-empty{font-family:'IBM Plex Sans KR',sans-serif;font-size:13.5px;color:#8a8368;white-space:normal;}
 .split{display:grid;grid-template-columns:1fr 1fr;gap:28px;}
@@ -143,14 +152,27 @@ a{color:var(--brass-soft);}
 .field textarea{font-family:'IBM Plex Mono',monospace;resize:vertical;min-height:56px;}
 .hint{font-size:11px;color:#6d7568;line-height:1.5;margin-top:6px;}
 .hint b{color:var(--brass-soft);}
+
+.booklist{list-style:none;margin:0 0 4px;padding:0;font-size:12px;}
+.booklist li{padding:8px 4px;border-bottom:1px solid #2c332a;}
+.booklist .row1{display:flex;justify-content:space-between;align-items:center;gap:6px;}
+.booklist .bname{color:#e7e2d1;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer;flex:1;}
+.booklist .bname:hover{color:var(--brass-soft);}
+.booklist .bmeta{font-size:10.5px;color:var(--text-dim);margin-top:2px;}
+.booklist .bactions{display:flex;gap:4px;flex-shrink:0;}
+.booklist .bactions button{background:none;border:none;color:#6d7568;font-size:12px;padding:2px 4px;}
+.booklist .bactions button:hover{color:var(--paper);}
+.booklist li.active{background:#2c332a;border-radius:4px;}
+
 .chaplist{list-style:none;margin:0;padding:0;font-size:12px;max-height:220px;overflow-y:auto;}
 .chaplist li{padding:6px 6px;border-bottom:1px solid #2c332a;display:flex;justify-content:space-between;gap:6px;align-items:center;}
-.chaplist li .t{color:#c9cdc2;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.chaplist li .t{color:#c9cdc2;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer;flex:1;}
+.chaplist li .t:hover{color:var(--brass-soft);}
+.chaplist li.current .t{color:var(--brass-soft);font-weight:600;}
 .chaplist li .x{color:#6d7568;background:none;border:none;font-size:13px;}
 .small-btn{font-size:11px;padding:5px 8px;}
 .row{display:flex;gap:6px;}
 .row > *{flex:1;}
-.checkrow{display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--text-dim);margin-top:6px;}
 .badge{display:inline-block;font-size:10px;padding:1px 6px;border-radius:8px;background:#2c332a;color:var(--brass-soft);margin-left:6px;}
 
 /* ---------- modal ---------- */
@@ -172,30 +194,59 @@ a{color:var(--brass-soft);}
 .footer-row{display:flex;justify-content:flex-end;gap:8px;margin-top:18px;}
 
 .toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:#232920;border:1px solid #3a4139;color:var(--paper);padding:10px 16px;border-radius:6px;font-size:12.5px;z-index:200;box-shadow:0 8px 24px rgba(0,0,0,.4);max-width:90vw;}
+
+/* ---------- mobile bottom nav ---------- */
+.bottombar{
+  display:none;
+}
+@media (max-width:880px){
+  body{padding-bottom:calc(var(--bottombar-h) + 6px);}
+  .topbar .controls-group{display:none;}
+  .bottombar{
+    display:flex;position:fixed;left:0;right:0;bottom:0;height:var(--bottombar-h);
+    background:var(--ink-2);border-top:1px solid #000;z-index:60;
+    padding-bottom:env(safe-area-inset-bottom,0);
+  }
+  .bottombar button{
+    flex:1;background:none;border:none;color:var(--text-dim);
+    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;
+    font-size:10.5px;
+  }
+  .bottombar button .ic{font-size:17px;line-height:1;}
+  .bottombar button.active{color:var(--brass-soft);}
+  #sitePanel.mtab-active{display:block;}
+  .main{display:none;}
+  .side{display:none;}
+  .main.mtab-active{display:flex;}
+  .side.mtab-active{display:block;}
+}
 </style>
 </head>
-<body>
+<body data-mtab="reader">
 
 <div class="topbar">
   <div class="brand"><span class="seal">譯</span><span class="brand-name">번역 <em>리더</em></span></div>
-  <select class="profile-select" id="profileSelect" title="등록된 사이트 유형"></select>
-  <div class="urlbar">
-    <input id="urlInput" type="text" placeholder="소설 페이지 URL을 붙여넣으세요 (예: https://loveread.ec/read_book.php?id=134312&p=1)">
-    <button class="btn btn-primary" id="loadBtn">불러오기</button>
+  <div class="controls-group" id="controlsGroup">
+    <select class="profile-select" id="profileSelect" title="등록된 사이트 유형"></select>
+    <div class="urlbar">
+      <input id="urlInput" type="text" placeholder="소설 페이지 URL을 붙여넣으세요">
+      <button class="btn btn-primary" id="loadBtn">불러오기</button>
+    </div>
   </div>
-  <button class="btn btn-icon" id="siteBtn" title="사이트 유형 등록/편집">🧩 사이트</button>
-  <button class="btn btn-icon" id="settingsBtn" title="번역 설정">⚙️ 설정</button>
+  <button class="btn btn-icon" id="siteBtn" title="사이트 유형 등록/편집">🧩</button>
+  <button class="btn btn-icon" id="settingsBtn" title="번역 설정">⚙️</button>
 </div>
 
 <div class="layout">
-  <div class="main">
+  <div class="main mtab-active" id="mainPanel">
     <div class="navstrip">
       <span class="ribbon" id="pageRibbon">—</span>
       <button class="btn" id="prevBtn">← 이전화</button>
       <button class="btn" id="nextBtn">다음화 →</button>
       <span class="status-line"><span class="dot" id="statusDot"></span><span id="statusText">대기 중</span></span>
     </div>
-    <div id="lastErrorLine" style="display:none;font-size:11.5px;color:var(--seal);margin:-8px 0 12px;"></div>
+    <div id="lastErrorLine" style="display:none;font-size:11.5px;color:var(--seal);margin:-2px 0 10px;"></div>
+    <div class="progress-track" id="progressTrack"><div class="progress-fill" id="progressFill"></div></div>
 
     <div class="page-wrap">
       <div class="viewtabs">
@@ -205,7 +256,7 @@ a{color:var(--brass-soft);}
       </div>
       <div class="page" id="pageEl">
         <div class="page-title" id="pageTitle">시작하려면 URL을 불러오세요</div>
-        <div class="page-body mono-empty" id="pageBody">사이트 유형을 선택하거나 새로 등록한 뒤, 상단에 회차 URL을 붙여넣고 <b>불러오기</b>를 누르세요. 본문을 추출해 번역까지 자동으로 진행합니다.</div>
+        <div class="page-body mono-empty" id="pageBody">사이트 유형을 선택하거나 새로 등록한 뒤, 상단(모바일은 하단 '사이트' 탭)에 회차 URL을 붙여넣고 <b>불러오기</b>를 누르세요.</div>
       </div>
       <div class="pagenav">
         <button class="btn" id="prevBtn2">← 이전화</button>
@@ -215,9 +266,15 @@ a{color:var(--brass-soft);}
     </div>
   </div>
 
-  <div class="side">
+  <div class="side" id="sidePanel">
     <div class="side-section">
-      <h3>이어받기 · 내보내기</h3>
+      <h3>내 작품 보관함</h3>
+      <ul class="booklist" id="bookList"></ul>
+      <div class="hint">작품(같은 작품ID)별로 회차가 자동으로 나뉘어 쌓입니다. 제목을 누르면 이름을 바꿀 수 있고, 목록을 눌러 불러온 회차 중 하나를 열 수 있습니다.</div>
+    </div>
+
+    <div class="side-section">
+      <h3>현재 작품 · 이어받기</h3>
       <div class="field">
         <label>연속으로 몇 화를 받아 번역할까요?</label>
         <div class="row">
@@ -228,9 +285,8 @@ a{color:var(--brass-soft);}
       <ul class="chaplist" id="chapList"></ul>
       <div class="row" style="margin-top:8px;">
         <button class="btn small-btn" id="exportBtn">전체 txt 저장</button>
-        <button class="btn small-btn" id="clearBtn">보관함 비우기</button>
+        <button class="btn small-btn" id="clearBtn">회차 비우기</button>
       </div>
-      <div class="hint">불러온 화들이 이 목록에 쌓입니다. 브라우저를 새로고침해도 <b>같은 작품의 진행 상황</b>은 유지되지만, API 키는 유지되지 않습니다.</div>
     </div>
 
     <div class="side-section">
@@ -239,7 +295,38 @@ a{color:var(--brass-soft);}
       <button class="btn small-btn" style="margin-top:8px;width:100%;" id="editProfileBtn">이 유형 편집</button>
     </div>
   </div>
+
+  <div id="sitePanel">
+    <div class="side-section">
+      <h3>사이트 · 회차 불러오기</h3>
+      <div class="field">
+        <label>사이트 유형</label>
+        <select class="profile-select" id="profileSelectMobile" style="width:100%;max-width:none;"></select>
+      </div>
+      <div class="field">
+        <label>회차 URL</label>
+        <div class="urlbar" style="padding:8px;">
+          <input id="urlInputMobile" type="text" placeholder="소설 페이지 URL을 붙여넣으세요">
+        </div>
+        <button class="btn btn-primary" id="loadBtnMobile" style="width:100%;margin-top:8px;">불러오기</button>
+      </div>
+      <div class="row">
+        <button class="btn small-btn" id="siteBtnMobile">🧩 사이트 유형 등록/편집</button>
+      </div>
+    </div>
+    <div class="side-section">
+      <h3>현재 사이트 유형</h3>
+      <div id="profileSummaryMobile" style="font-size:12px;color:#b9beb0;line-height:1.7;"></div>
+    </div>
+  </div>
 </div>
+
+<nav class="bottombar" id="bottombar">
+  <button data-mtab="reader" class="active"><span class="ic">📖</span>리더</button>
+  <button data-mtab="chapters"><span class="ic">📑</span>회차</button>
+  <button data-mtab="site"><span class="ic">🔗</span>사이트</button>
+  <button id="bottomSettingsBtn"><span class="ic">⚙️</span>설정</button>
+</nav>
 
 <!-- ===== Settings modal ===== -->
 <div class="modal-bg" id="settingsModal">
@@ -255,7 +342,7 @@ a{color:var(--brass-soft);}
         <button class="btn small-btn" id="testKeysBtn">키 테스트</button>
         <button class="btn small-btn" id="clearKeysBtn">키 지우기</button>
       </div>
-      <div class="hint">첫 번째 키가 실패(할당량 초과·오류)하면 다음 키로 자동 전환됩니다. 모든 키가 실패하면 <b>구글 번역</b>으로 자동 대체됩니다. 키를 하나도 입력하지 않으면 처음부터 구글 번역만 사용합니다. <b>키 테스트</b>를 누르면 실제 오류 메시지(권한 없음, 모델 없음, 할당량 초과 등)를 바로 확인할 수 있습니다.</div>
+      <div class="hint">첫 번째 키가 실패(할당량 초과·오류)하면 다음 키로 자동 전환됩니다. 모든 키가 실패하면 <b>구글 번역</b>으로 자동 대체됩니다. 키를 하나도 입력하지 않으면 처음부터 구글 번역만 사용합니다.</div>
       <div id="keyTestResult" style="display:none;font-family:'IBM Plex Mono',monospace;font-size:11px;background:#151915;border:1px solid #3a4139;border-radius:4px;padding:8px;margin-top:8px;white-space:pre-wrap;max-height:140px;overflow-y:auto;"></div>
     </div>
     <div class="two-col">
@@ -282,7 +369,7 @@ a{color:var(--brass-soft);}
         <option value="custom">직접 입력…</option>
       </select>
       <input id="corsProxyCustom" type="text" style="margin-top:6px;display:none;" placeholder="https://your-proxy.com/?target={url}">
-      <div class="hint">GitHub Pages는 정적 사이트라 서버가 없어서, 브라우저에서 외부 소설 사이트를 직접 읽지 못하는 경우 위 프록시를 거칩니다. <code>{url}</code> 자리에 인코딩된 원본 주소가 들어갑니다. <b>리더 프록시(자동 추출) 모드는 항상 r.jina.ai를 별도로 사용하므로 이 설정과 무관합니다.</b></div>
+      <div class="hint">GitHub Pages는 정적 사이트라 서버가 없어서, 브라우저에서 외부 소설 사이트를 직접 읽지 못하는 경우 위 프록시를 거칩니다. <code>{url}</code> 자리에 인코딩된 원본 주소가 들어갑니다. 리더 프록시(자동 추출) 모드는 항상 r.jina.ai를 별도로 사용하므로 이 설정과 무관합니다.</div>
     </div>
     <div class="footer-row">
       <button class="btn btn-primary" data-close="settingsModal">저장하고 닫기</button>
@@ -369,6 +456,7 @@ const memory = {
 const LS_PROFILES = 'tr_profiles_v1';
 const LS_LAST = 'tr_last_v1';
 const LS_SETTINGS = 'tr_settings_v1';
+const LS_BOOKS = 'tr_books_v1';
 const PROXY_FALLBACKS = [
   'https://api.allorigins.win/raw?url={url}',
   'https://corsproxy.io/?url={url}'
@@ -379,6 +467,7 @@ let currentProfileId = null;
 let currentUrl = '';
 let currentBookKey = null;   // profileId::idValue, used to bucket saved chapters
 let chapters = [];           // [{url, page, title, original, translated}]
+let books = [];              // [{key, profileId, idValue, title, updatedAt}]
 let currentView = 'translated';
 let busy = false;
 
@@ -415,10 +504,14 @@ function loadProfiles(){
 function saveProfiles(){ localStorage.setItem(LS_PROFILES, JSON.stringify(profiles)); }
 
 function renderProfileSelect(){
-  const sel = document.getElementById('profileSelect');
-  sel.innerHTML = profiles.map(p=>`<option value="${p.id}">${escapeHtml(p.name)}</option>`).join('')
+  const opts = profiles.map(p=>`<option value="${p.id}">${escapeHtml(p.name)}</option>`).join('')
     + `<option value="__new__">+ 새 사이트 등록…</option>`;
-  if(currentProfileId) sel.value = currentProfileId;
+  ['profileSelect','profileSelectMobile'].forEach(id=>{
+    const sel = document.getElementById(id);
+    if(!sel) return;
+    sel.innerHTML = opts;
+    if(currentProfileId) sel.value = currentProfileId;
+  });
 }
 
 function getProfile(id){ return profiles.find(p=>p.id===id); }
@@ -434,6 +527,12 @@ function profileSummaryHtml(p){
     <div>페이지 위치: ${pagePart} (±${p.step})</div>
     <div>추출 방식: ${p.mode==='reader'?'리더 프록시 자동 추출':'선택자'+(p.contentSel?` (<code>${escapeHtml(p.contentSel)}</code>)`:' + 자동 감지')}</div>
   `;
+}
+function renderProfileSummary(){
+  const html = profileSummaryHtml(getProfile(currentProfileId));
+  document.getElementById('profileSummary').innerHTML = html;
+  const m = document.getElementById('profileSummaryMobile');
+  if(m) m.innerHTML = html;
 }
 
 /* =========================================================================
@@ -451,7 +550,7 @@ function setStatus(text, kind){
   const dot = document.getElementById('statusDot');
   dot.className = 'dot' + (kind ? ' '+kind : '');
 }
-function setBusy(v){ busy = v; document.querySelectorAll('.btn').forEach(b=>{ if(v) b.setAttribute('data-was-disabled', b.disabled?'1':'0'); }); }
+function setBusy(v){ busy = v; }
 
 let lastErrorDetail = '';
 function setLastError(msg){
@@ -462,8 +561,27 @@ function setLastError(msg){
   else el.style.display='none';
 }
 
+/* ---- 진행상황 바 ---- */
+function showProgress(){ document.getElementById('progressTrack').style.display='block'; }
+function hideProgress(){
+  document.getElementById('progressTrack').style.display='none';
+  const f = document.getElementById('progressFill');
+  f.style.width='0%'; f.classList.remove('indeterminate');
+}
+function setProgressIndeterminate(){
+  showProgress();
+  const f = document.getElementById('progressFill');
+  f.classList.add('indeterminate');
+}
+function setProgressPct(pct){
+  showProgress();
+  const f = document.getElementById('progressFill');
+  f.classList.remove('indeterminate');
+  f.style.width = Math.max(0,Math.min(100,pct))+'%';
+}
+
 /* =========================================================================
-   설정 읽기/저장 (DOM이 항상 source of truth, localStorage에 자동 동기화)
+   설정 읽기/저장
    ========================================================================= */
 function readSettingsFromDom(){
   const apiKeys = document.getElementById('apiKeys').value.split('\n').map(s=>s.trim()).filter(Boolean);
@@ -479,7 +597,6 @@ function readSettingsFromDom(){
     corsProxyTemplate
   };
 }
-
 function syncSettings(){
   const s = readSettingsFromDom();
   Object.assign(memory, s);
@@ -494,7 +611,6 @@ function syncSettings(){
   }catch(e){ console.warn('설정 저장 실패', e); }
   return s;
 }
-
 function restoreSettingsToDom(){
   let saved = null;
   try{ saved = JSON.parse(localStorage.getItem(LS_SETTINGS) || 'null'); }catch(e){}
@@ -514,7 +630,6 @@ function restoreSettingsToDom(){
   }
 }
 
-/* CORS 프록시 여러 개를 순서대로 시도 (하나 실패하면 다음 프록시로) */
 async function fetchWithProxyFallback(targetUrl){
   const primary = memory.corsProxyTemplate || PROXY_FALLBACKS[0];
   const list = [primary, ...PROXY_FALLBACKS.filter(p=>p!==primary)];
@@ -542,14 +657,12 @@ function analyzeUrl(urlStr){
   let u;
   try{ u = new URL(urlStr); }catch(e){ return null; }
   const cands = [];
-  // path segments
   const segs = u.pathname.split('/').filter(Boolean);
   segs.forEach((seg,i)=>{
     if(/^\d+$/.test(seg)){
       cands.push({type:'path', index:i, value:seg, label:`경로[${i+1}] = ${seg}`});
     }
   });
-  // query params
   for(const [k,v] of u.searchParams.entries()){
     if(/^\d+$/.test(v)){
       cands.push({type:'query', key:k, value:v, label:`쿼리 ${k} = ${v}`});
@@ -559,7 +672,6 @@ function analyzeUrl(urlStr){
 }
 
 function buildProfileFromChoice(u, cands, idPick, pagePick, name, step, mode, contentSel, titleSel, removeSel){
-  // urlTemplate: reconstruct from URL, replacing chosen segments
   const idLoc = idPick ? (idPick.type==='query' ? {type:'query', key:idPick.key} : {type:'path', index:idPick.index}) : null;
   const pageLoc = pagePick ? (pagePick.type==='query' ? {type:'query', key:pagePick.key} : {type:'path', index:pagePick.index}) : null;
   if(!pageLoc) return null;
@@ -676,7 +788,6 @@ async function fetchChapter(profile, url){
 }
 
 function cleanBlockText(el){
-  // convert <br> to newlines, block elements to paragraph breaks
   const clone = el.cloneNode(true);
   clone.querySelectorAll('br').forEach(br=>br.replaceWith('\n'));
   clone.querySelectorAll('p,div,tr,li,h1,h2,h3,h4').forEach(b=>{
@@ -691,7 +802,7 @@ function autoDetectContent(doc){
   const candidates = doc.body ? doc.body.querySelectorAll('div,section,article,td,main') : [];
   let best = null, bestScore = 0;
   candidates.forEach(el=>{
-    if(el.querySelectorAll('div,section,article,td,main').length > 40) return; // skip big wrappers
+    if(el.querySelectorAll('div,section,article,td,main').length > 40) return;
     const text = el.textContent || '';
     const len = text.trim().length;
     if(len < 200) return;
@@ -731,7 +842,6 @@ async function translateChunkGemini(chunk, key){
   });
   const reqOpts = {method:'POST', headers:{'Content-Type':'application/json'}, body: bodyStr};
 
-  // 1차: 브라우저에서 직접 호출
   let status = null, text = null, networkErr = null;
   try{
     const res = await fetch(url, reqOpts);
@@ -746,9 +856,6 @@ async function translateChunkGemini(chunk, key){
     try{ data = JSON.parse(text); }catch(e){ data = null; }
   }
 
-  // 직접 호출이 네트워크 오류이거나, 응답이 JSON이 아니면(예: 리퍼러 제한으로 인한 차단 HTML 페이지)
-  // corsproxy.io를 통해 한 번 더 시도한다. 프록시를 거치면 요청의 Origin/Referer가 바뀌어
-  // "웹사이트 제한"이 걸린 키에서도 통과되는 경우가 있다.
   if(networkErr || !data){
     try{
       const proxyUrl = 'https://corsproxy.io/?url=' + encodeURIComponent(url);
@@ -764,7 +871,7 @@ async function translateChunkGemini(chunk, key){
 
   if(!data){
     const snippet = (text||'').slice(0,150).replace(/\s+/g,' ');
-    throw new Error(`Gemini가 JSON이 아닌 응답을 반환했습니다 (HTTP ${status}): "${snippet}". API 키의 "웹사이트 제한(HTTP referrer)"이 설정되어 있다면 Google AI Studio/Cloud Console에서 제한을 해제하거나 이 사이트 주소를 허용 목록에 추가해보세요.`);
+    throw new Error(`Gemini가 JSON이 아닌 응답을 반환했습니다 (HTTP ${status}): "${snippet}". API 키의 "웹사이트 제한(HTTP referrer)"이 설정되어 있다면 제한을 해제하거나 이 사이트 주소를 허용 목록에 추가해보세요.`);
   }
   if(status && status >= 400){
     const msg = (data.error && data.error.message) ? data.error.message : JSON.stringify(data).slice(0,200);
@@ -780,7 +887,6 @@ async function translateChunkGemini(chunk, key){
 
 async function fetchTextDirectOrProxy(targetUrl){
   const attempts = [];
-  // 1) 프록시 없이 직접 시도 (translate.googleapis.com은 환경에 따라 직접 호출이 되기도 함)
   try{
     const res = await fetch(targetUrl);
     if(res.ok){
@@ -793,7 +899,6 @@ async function fetchTextDirectOrProxy(targetUrl){
   }catch(e){
     attempts.push('직접 호출: '+e.message);
   }
-  // 2) 프록시 체인
   try{
     return await fetchWithProxyFallback(targetUrl);
   }catch(e){
@@ -802,7 +907,6 @@ async function fetchTextDirectOrProxy(targetUrl){
 }
 
 async function translateChunkGoogle(chunk){
-  // google translate free endpoint has practical URL length limits; sub-chunk further
   const subs = chunkText(chunk, 700);
   const parts = [];
   for(let i=0;i<subs.length;i++){
@@ -828,12 +932,13 @@ async function translateChunkGoogle(chunk){
 }
 
 function sleep(ms){ return new Promise(r=>setTimeout(r,ms)); }
+function maskKey(k){ return k.length>8 ? k.slice(0,4)+'…'+k.slice(-4) : k; }
 
 let geminiExhausted = false;
 
 async function translateFullText(text, onProgress){
   syncSettings();
-  geminiExhausted = false; // 새 번역마다 Gemini를 다시 시도
+  geminiExhausted = false;
   const chunks = chunkText(text);
   const out = [];
   const keyErrors = [];
@@ -858,7 +963,7 @@ async function translateFullText(text, onProgress){
       if(!done){
         geminiExhausted = true;
         setLastError('Gemini 키 전부 실패 → ' + keyErrors.slice(-3).join(' | '));
-        toast('모든 Gemini 키가 실패해 구글 번역으로 전환합니다. (상세: 하단 오류 로그 참고)', 4500);
+        toast('모든 Gemini 키가 실패해 구글 번역으로 전환합니다.', 4000);
       }
     }
     if(!done){
@@ -875,7 +980,128 @@ async function translateFullText(text, onProgress){
   return out.join('\n\n');
 }
 
-function maskKey(k){ return k.length>8 ? k.slice(0,4)+'…'+k.slice(-4) : k; }
+/* =========================================================================
+   작품 보관함 (같은 작품ID끼리 회차 그룹핑)
+   ========================================================================= */
+function loadBooks(){
+  try{ books = JSON.parse(localStorage.getItem(LS_BOOKS) || '[]'); }catch(e){ books = []; }
+}
+function saveBooks(){ localStorage.setItem(LS_BOOKS, JSON.stringify(books)); }
+
+function guessBookTitle(chapterTitle, profile, idValue){
+  if(chapterTitle){
+    let segs = chapterTitle.split(/[-–—|:·丨]/).map(s=>s.trim()).filter(Boolean);
+    segs = segs.filter(s=>{
+      if(s.length < 2) return false;
+      if(/^\d+\s*(화|장|권|부|편|page|p|chapter|chap|ch)?\.?$/i.test(s)) return false;
+      if(/^(chapter|chap|ch|화|장|권|부|편)\s*\.?\s*\d+$/i.test(s)) return false;
+      return true;
+    });
+    segs.sort((a,b)=>b.length-a.length);
+    if(segs.length && segs[0].length >= 2) return segs[0];
+  }
+  return (profile ? profile.name : '작품') + ' #' + (idValue||'?');
+}
+
+function registerBookIfNew(profile, idValue, firstChapterTitle){
+  const key = profile.id + '::' + (idValue||'x');
+  let b = books.find(x=>x.key===key);
+  if(!b){
+    b = { key, profileId: profile.id, idValue: idValue||'', title: guessBookTitle(firstChapterTitle, profile, idValue), updatedAt: Date.now() };
+    books.push(b);
+  } else {
+    b.updatedAt = Date.now();
+  }
+  saveBooks();
+  renderBookList();
+  return b;
+}
+
+function deleteBook(key){
+  books = books.filter(b=>b.key!==key);
+  saveBooks();
+  localStorage.removeItem('tr_book_'+key);
+  if(currentBookKey === key){
+    chapters = [];
+    currentUrl = '';
+    currentBookKey = null;
+    renderChapList();
+    document.getElementById('pageTitle').textContent = '시작하려면 URL을 불러오세요';
+    const body = document.getElementById('pageBody');
+    body.classList.add('mono-empty');
+    body.textContent = '사이트 유형을 선택하거나 새로 등록한 뒤, 회차 URL을 불러오세요.';
+    document.getElementById('pageRibbon').textContent = '—';
+  }
+  renderBookList();
+}
+
+function renameBook(key){
+  const b = books.find(x=>x.key===key);
+  if(!b) return;
+  const name = prompt('새 작품 제목', b.title);
+  if(name === null) return;
+  const trimmed = name.trim();
+  if(!trimmed) return;
+  b.title = trimmed;
+  saveBooks();
+  renderBookList();
+}
+
+function openBook(key){
+  const b = books.find(x=>x.key===key);
+  if(!b) return;
+  currentProfileId = b.profileId;
+  currentBookKey = key;
+  renderProfileSelect();
+  renderProfileSummary();
+  restoreChapters();
+  if(chapters.length){
+    const sorted = [...chapters].sort((a,b2)=>(parseFloat(b2.page)||0)-(parseFloat(a.page)||0));
+    const entry = sorted[0];
+    currentUrl = entry.url;
+    document.getElementById('urlInput').value = entry.url;
+    const mUrl = document.getElementById('urlInputMobile'); if(mUrl) mUrl.value = entry.url;
+    renderPage(entry);
+    saveLast();
+  }
+  renderBookList();
+  setMobileTab('chapters');
+}
+
+function renderBookList(){
+  const ul = document.getElementById('bookList');
+  if(!books.length){ ul.innerHTML = '<li style="color:#6d7568;border-bottom:none;">아직 불러온 작품이 없습니다.</li>'; return; }
+  const sorted = [...books].sort((a,b)=>b.updatedAt-a.updatedAt);
+  ul.innerHTML = sorted.map(b=>{
+    let cnt = 0;
+    try{ cnt = (JSON.parse(localStorage.getItem('tr_book_'+b.key)||'[]')||[]).length; }catch(e){}
+    const prof = getProfile(b.profileId);
+    const active = b.key === currentBookKey ? 'active' : '';
+    return `
+      <li class="${active}" data-key="${escapeHtml(b.key)}">
+        <div class="row1">
+          <span class="bname" data-open="${escapeHtml(b.key)}">${escapeHtml(b.title)}</span>
+          <span class="bactions">
+            <button data-rename="${escapeHtml(b.key)}" title="이름 바꾸기">✎</button>
+            <button data-delkey="${escapeHtml(b.key)}" title="삭제">✕</button>
+          </span>
+        </div>
+        <div class="bmeta">${prof?escapeHtml(prof.name):'?'} · ${cnt}화 저장됨</div>
+      </li>
+    `;
+  }).join('');
+}
+
+document.getElementById('bookList').addEventListener('click', (e)=>{
+  const openEl = e.target.closest('[data-open]');
+  const renEl = e.target.closest('[data-rename]');
+  const delEl = e.target.closest('[data-delkey]');
+  if(openEl) openBook(openEl.getAttribute('data-open'));
+  else if(renEl) renameBook(renEl.getAttribute('data-rename'));
+  else if(delEl){
+    if(confirm('이 작품과 저장된 모든 회차를 삭제할까요?')) deleteBook(delEl.getAttribute('data-delkey'));
+  }
+});
 
 /* =========================================================================
    메인 로딩 흐름
@@ -887,16 +1113,25 @@ async function loadAndTranslate(url, {silent}={}){
   setLastError('');
   setBusy(true);
   setStatus('본문 가져오는 중…', 'busy');
+  setProgressIndeterminate();
   try{
     const ids = extractIdAndPage(profile, url);
     const {title, body} = await fetchChapter(profile, url);
     setStatus('번역 중…', 'busy');
-    const translated = await translateFullText(body, (i,n)=> setStatus(`번역 중… (${i}/${n} 조각)`, 'busy'));
+    const translated = await translateFullText(body, (i,n)=>{
+      setStatus(`번역 중… (${i}/${n} 조각)`, 'busy');
+      setProgressPct(n ? (i/n)*100 : 0);
+    });
     const entry = { url, page: ids?ids.page:'', title, original: body, translated };
+    if(!currentBookKey || currentBookKey.split('::')[0] !== profile.id){
+      // book context may not match yet (e.g. first load) — ensure it's set
+    }
+    registerBookIfNew(profile, ids?ids.id:null, title);
     upsertChapter(entry);
     currentUrl = url;
     renderPage(entry);
     setStatus('완료', 'ok');
+    setProgressPct(100);
     if(!silent) toast('번역 완료: '+title);
     saveLast();
     return entry;
@@ -908,6 +1143,7 @@ async function loadAndTranslate(url, {silent}={}){
     return null;
   }finally{
     setBusy(false);
+    setTimeout(hideProgress, 500);
   }
 }
 
@@ -916,6 +1152,7 @@ function upsertChapter(entry){
   if(i>=0) chapters[i] = entry; else chapters.push(entry);
   renderChapList();
   persistChapters();
+  renderBookList();
 }
 
 function renderPage(entry){
@@ -943,6 +1180,7 @@ function renderPage(entry){
     bodyEl.style.display = 'block';
     bodyEl.textContent = currentView === 'original' ? entry.original : entry.translated;
   }
+  renderChapList();
 }
 
 function currentChapter(){ return chapters.find(c=>c.url===currentUrl); }
@@ -953,8 +1191,8 @@ function currentChapter(){ return chapters.find(c=>c.url===currentUrl); }
 function renderChapList(){
   const ul = document.getElementById('chapList');
   ul.innerHTML = chapters.map(c=>`
-    <li>
-      <span class="t" title="${escapeHtml(c.title)}">${c.page?('#'+c.page+' '):''}${escapeHtml(c.title||c.url)}</span>
+    <li class="${c.url===currentUrl?'current':''}">
+      <span class="t" data-open="${encodeURIComponent(c.url)}" title="${escapeHtml(c.title)}">${c.page?('#'+c.page+' '):''}${escapeHtml(c.title||c.url)}</span>
       <button class="x" data-remove="${encodeURIComponent(c.url)}" title="삭제">✕</button>
     </li>
   `).join('') || '<li style="color:#6d7568;">아직 불러온 화가 없습니다.</li>';
@@ -967,11 +1205,12 @@ function exportAllTxt(){
     if(!isNaN(pa) && !isNaN(pb)) return pa-pb;
     return 0;
   });
+  const bookTitle = (books.find(b=>b.key===currentBookKey)||{}).title || (getProfile(currentProfileId)||{}).name || 'translation';
   const text = sorted.map(c=>`${'='.repeat(10)} ${c.title||c.url} ${'='.repeat(10)}\n\n${c.translated}\n`).join('\n\n');
   const blob = new Blob([text], {type:'text/plain;charset=utf-8'});
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = (getProfile(currentProfileId)?.name || 'translation') + '.txt';
+  a.download = bookTitle + '.txt';
   document.body.appendChild(a); a.click(); a.remove();
 }
 
@@ -989,7 +1228,7 @@ function restoreChapters(){
 }
 
 function saveLast(){
-  localStorage.setItem(LS_LAST, JSON.stringify({profileId: currentProfileId, url: currentUrl}));
+  localStorage.setItem(LS_LAST, JSON.stringify({profileId: currentProfileId, url: currentUrl, bookKey: currentBookKey}));
 }
 
 /* =========================================================================
@@ -1010,8 +1249,14 @@ async function gotoPage(delta){
   const nextPage = (parseInt(ids.page,10) + delta*profile.step);
   if(nextPage < 1){ toast('첫 화입니다.'); return; }
   const nextUrl = buildUrlForPage(profile, ids.id, nextPage);
-  document.getElementById('urlInput').value = nextUrl;
+  setUrlInputs(nextUrl);
   await loadAndTranslate(nextUrl);
+}
+
+function setUrlInputs(url){
+  document.getElementById('urlInput').value = url;
+  const m = document.getElementById('urlInputMobile');
+  if(m) m.value = url;
 }
 
 async function batchContinue(){
@@ -1022,6 +1267,7 @@ async function batchContinue(){
   for(let i=0;i<n;i++){
     const ids = extractIdAndPage(profile, url);
     if(!ids) break;
+    setStatus(`이어받기 (${i+1}/${n})…`, 'busy');
     const entry = await loadAndTranslate(url, {silent:true});
     if(!entry) break;
     toast(`(${i+1}/${n}) 완료: ${entry.title}`, 1500);
@@ -1029,29 +1275,37 @@ async function batchContinue(){
     url = buildUrlForPage(profile, ids.id, nextPage);
     await sleep(400);
   }
-  document.getElementById('urlInput').value = url;
+  setUrlInputs(url);
   toast('이어받기 종료. 보관함에서 확인하세요.');
 }
 
 /* =========================================================================
    UI 이벤트 바인딩
    ========================================================================= */
-document.getElementById('loadBtn').onclick = async ()=>{
-  const url = document.getElementById('urlInput').value.trim();
-  if(!url){ toast('URL을 입력하세요.'); return; }
-  const profile = matchProfileForUrl(url);
-  if(profile){ currentProfileId = profile.id; renderProfileSelect(); renderProfileSummary(); }
-  updateBookKey(url);
-  restoreChapters();
-  await loadAndTranslate(url);
-};
-
 function matchProfileForUrl(url){
   try{
     const u = new URL(url);
     return profiles.find(p=>p.hostname === u.hostname) || getProfile(currentProfileId);
   }catch(e){ return getProfile(currentProfileId); }
 }
+
+async function doLoad(url){
+  if(!url){ toast('URL을 입력하세요.'); return; }
+  const profile = matchProfileForUrl(url);
+  if(profile){ currentProfileId = profile.id; renderProfileSelect(); renderProfileSummary(); }
+  updateBookKey(url);
+  restoreChapters();
+  await loadAndTranslate(url);
+  setMobileTab('reader');
+}
+
+document.getElementById('loadBtn').onclick = ()=> doLoad(document.getElementById('urlInput').value.trim());
+document.getElementById('loadBtnMobile').onclick = ()=>{
+  const v = document.getElementById('urlInputMobile').value.trim();
+  document.getElementById('urlInput').value = v;
+  doLoad(v);
+};
+document.getElementById('urlInputMobile').addEventListener('input', e=>{ document.getElementById('urlInput').value = e.target.value; });
 
 document.getElementById('prevBtn').onclick = ()=>gotoPage(-1);
 document.getElementById('nextBtn').onclick = ()=>gotoPage(1);
@@ -1061,14 +1315,28 @@ document.getElementById('translateBtn').onclick = ()=>{ if(currentUrl) loadAndTr
 document.getElementById('batchBtn').onclick = batchContinue;
 document.getElementById('exportBtn').onclick = exportAllTxt;
 document.getElementById('clearBtn').onclick = ()=>{
-  if(confirm('현재 작품의 보관함을 비울까요?')){ chapters=[]; renderChapList(); persistChapters(); }
+  if(confirm('현재 작품의 회차 목록을 비울까요? (작품 자체는 보관함에 남습니다)')){ chapters=[]; renderChapList(); persistChapters(); renderBookList(); }
 };
 document.getElementById('chapList').addEventListener('click', (e)=>{
-  const btn = e.target.closest('[data-remove]');
-  if(!btn) return;
-  const url = decodeURIComponent(btn.getAttribute('data-remove'));
-  chapters = chapters.filter(c=>c.url!==url);
-  renderChapList(); persistChapters();
+  const openBtn = e.target.closest('[data-open]');
+  const rmBtn = e.target.closest('[data-remove]');
+  if(openBtn){
+    const url = decodeURIComponent(openBtn.getAttribute('data-open'));
+    const entry = chapters.find(c=>c.url===url);
+    if(entry){
+      currentUrl = url;
+      setUrlInputs(url);
+      renderPage(entry);
+      saveLast();
+      setMobileTab('reader');
+    }
+    return;
+  }
+  if(rmBtn){
+    const url = decodeURIComponent(rmBtn.getAttribute('data-remove'));
+    chapters = chapters.filter(c=>c.url!==url);
+    renderChapList(); persistChapters(); renderBookList();
+  }
 });
 
 document.querySelectorAll('.viewtabs button').forEach(b=>{
@@ -1081,20 +1349,24 @@ document.querySelectorAll('.viewtabs button').forEach(b=>{
   };
 });
 
-document.getElementById('profileSelect').onchange = (e)=>{
+function onProfileChange(e){
   if(e.target.value === '__new__'){
     openSiteModal(null);
-    renderProfileSelect(); // reset selection visually
     e.target.value = currentProfileId || '';
     return;
   }
   currentProfileId = e.target.value;
+  renderProfileSelect();
   renderProfileSummary();
-};
+}
+document.getElementById('profileSelect').addEventListener('change', onProfileChange);
+document.getElementById('profileSelectMobile').addEventListener('change', onProfileChange);
 
 document.getElementById('siteBtn').onclick = ()=>openSiteModal(getProfile(currentProfileId));
+document.getElementById('siteBtnMobile').onclick = ()=>openSiteModal(getProfile(currentProfileId));
 document.getElementById('editProfileBtn').onclick = ()=>openSiteModal(getProfile(currentProfileId));
-document.getElementById('settingsBtn').onclick = ()=>{ document.getElementById('settingsModal').classList.add('show'); };
+document.getElementById('settingsBtn').onclick = ()=>{ syncSettings(); document.getElementById('settingsModal').classList.add('show'); };
+document.getElementById('bottomSettingsBtn').onclick = ()=>{ syncSettings(); document.getElementById('settingsModal').classList.add('show'); };
 
 document.querySelectorAll('[data-close]').forEach(el=>{
   el.addEventListener('click', ()=>{
@@ -1102,19 +1374,13 @@ document.querySelectorAll('[data-close]').forEach(el=>{
   });
 });
 
-/* ---- settings modal wiring ----
-   DOM은 항상 source of truth. 입력이 있을 때마다(스크롤/타이핑 포함) memory + localStorage에
-   즉시 동기화하므로, '변경 이벤트를 놓쳐서 키가 비어있는' 상황이 생기지 않는다. */
+/* ---- settings modal wiring ---- */
 document.getElementById('settingsModal').addEventListener('input', ()=>{ syncSettings(); });
 document.getElementById('corsProxy').addEventListener('change', e=>{
   const customInput = document.getElementById('corsProxyCustom');
   customInput.style.display = (e.target.value === 'custom') ? 'block' : 'none';
   syncSettings();
 });
-document.getElementById('settingsBtn').addEventListener('click', ()=>{
-  // 모달을 열 때도 현재 DOM 값을 memory에 반영해 최신 상태를 보장
-  syncSettings();
-}, {capture:true});
 
 document.getElementById('testKeysBtn').onclick = async ()=>{
   syncSettings();
@@ -1143,6 +1409,22 @@ document.getElementById('clearKeysBtn').onclick = ()=>{
 };
 
 /* =========================================================================
+   모바일 하단 탭
+   ========================================================================= */
+function setMobileTab(tab){
+  document.body.setAttribute('data-mtab', tab);
+  document.querySelectorAll('.bottombar button[data-mtab]').forEach(b=>{
+    b.classList.toggle('active', b.getAttribute('data-mtab')===tab);
+  });
+  document.getElementById('mainPanel').classList.toggle('mtab-active', tab==='reader');
+  document.getElementById('sidePanel').classList.toggle('mtab-active', tab==='chapters');
+  document.getElementById('sitePanel').classList.toggle('mtab-active', tab==='site');
+}
+document.querySelectorAll('.bottombar button[data-mtab]').forEach(b=>{
+  b.addEventListener('click', ()=>setMobileTab(b.getAttribute('data-mtab')));
+});
+
+/* =========================================================================
    사이트 등록 모달
    ========================================================================= */
 let siteModalCands = null;
@@ -1153,7 +1435,7 @@ let editingProfileId = null;
 function openSiteModal(profile){
   editingProfileId = profile ? profile.id : null;
   document.getElementById('siteModalTitle').textContent = profile ? '사이트 유형 편집' : '사이트 유형 등록';
-  document.getElementById('sampleUrl').value = profile ? buildUrlForPage(profile, '123', '1') : (document.getElementById('urlInput').value || '');
+  document.getElementById('sampleUrl').value = profile ? buildUrlForPage(profile, '123', '1') : (document.getElementById('urlInput').value || document.getElementById('urlInputMobile').value || '');
   document.getElementById('profName').value = profile ? profile.name : '';
   document.getElementById('profStep').value = profile ? profile.step : 1;
   document.getElementById('profMode').value = profile ? profile.mode : 'reader';
@@ -1217,7 +1499,6 @@ document.getElementById('saveProfBtn').onclick = ()=>{
   if(siteModalUrl && pagePick){
     profile = buildProfileFromChoice(siteModalUrl, siteModalCands, idPick, pagePick, name, step, mode, contentSel, titleSel, removeSel);
   } else if(editingProfileId){
-    // editing existing without re-analyzing: just update the meta fields
     profile = getProfile(editingProfileId);
     profile.name = name || profile.name;
     profile.step = Number(step)||1;
@@ -1258,15 +1539,12 @@ document.getElementById('deleteProfBtn').onclick = ()=>{
   document.getElementById('siteModal').classList.remove('show');
 };
 
-function renderProfileSummary(){
-  document.getElementById('profileSummary').innerHTML = profileSummaryHtml(getProfile(currentProfileId));
-}
-
 /* =========================================================================
    초기화
    ========================================================================= */
 (function init(){
   loadProfiles();
+  loadBooks();
   restoreSettingsToDom();
   syncSettings();
   let last = null;
@@ -1274,14 +1552,18 @@ function renderProfileSummary(){
   currentProfileId = (last && getProfile(last.profileId)) ? last.profileId : profiles[0].id;
   renderProfileSelect();
   renderProfileSummary();
+  renderBookList();
   if(last && last.url){
     document.getElementById('urlInput').value = last.url;
+    const m = document.getElementById('urlInputMobile'); if(m) m.value = last.url;
     currentUrl = last.url;
-    updateBookKey(last.url);
+    currentBookKey = last.bookKey || null;
+    if(!currentBookKey) updateBookKey(last.url);
     restoreChapters();
     const existing = chapters.find(c=>c.url===last.url);
     if(existing) renderPage(existing);
   }
+  setMobileTab('reader');
 })();
 </script>
 </body>
