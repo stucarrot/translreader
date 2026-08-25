@@ -92,6 +92,12 @@ a{color:var(--brass-soft);}
 @media (max-width:880px){
   .layout{flex-direction:column;}
   .side{width:100%;border-left:none;border-top:1px solid #000;}
+  .main{padding:12px 8px 30px;}
+  .page{padding:20px 14px 32px;}
+}
+@media (max-width:420px){
+  .main{padding:10px 5px 26px;}
+  .page{padding:16px 10px 28px;}
 }
 
 /* ---------- progress bar ---------- */
@@ -116,6 +122,7 @@ a{color:var(--brass-soft);}
 
 /* ---------- page (reading pane) ---------- */
 .page-wrap{flex:1;display:flex;flex-direction:column;}
+.viewtabs-row{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;}
 .viewtabs{display:flex;gap:2px;margin-bottom:0;}
 .viewtabs button{
   background:#232920;color:var(--text-dim);border:1px solid #000;border-bottom:none;
@@ -123,18 +130,36 @@ a{color:var(--brass-soft);}
 }
 .viewtabs button.active{background:var(--paper);color:var(--ink);font-weight:600;}
 .page{
-  background:var(--paper);color:var(--ink);border-radius:0 6px 6px 6px;
+  --pg-bg:var(--paper); --pg-text:#2a2a20; --pg-title:#2b2718; --pg-line:var(--paper-line); --pg-accent:var(--brass);
+  --pg-fs:18px; --pg-lh:1.9; --pg-pg:1em;
+  background:var(--pg-bg);color:var(--pg-text);border-radius:0 6px 6px 6px;
   box-shadow:var(--shadow-page);
   padding:32px 30px 40px;flex:1;min-height:260px;
 }
-.page-title{font-family:'Newsreader',serif;font-size:21px;margin:0 0 20px;color:#2b2718;border-bottom:1px solid var(--paper-line);padding-bottom:14px;}
-.page-body{font-family:'Newsreader',serif;font-size:18px;line-height:1.9;color:#2a2a20;white-space:pre-wrap;}
+.page[data-theme="dark"]{--pg-bg:#1b1f1c; --pg-text:#cfd0c4; --pg-title:#f0ece0; --pg-line:#3a4139; --pg-accent:var(--brass-soft);}
+.page[data-theme="sepia"]{--pg-bg:#ece0c3; --pg-text:#3a2f1d; --pg-title:#2c2211; --pg-line:#d8c79a; --pg-accent:#8a6a2f;}
+.page-title{font-family:'Newsreader',serif;font-size:21px;margin:0 0 20px;color:var(--pg-title);border-bottom:1px solid var(--pg-line);padding-bottom:14px;}
+.page-body{font-family:'Newsreader',serif;font-size:var(--pg-fs);line-height:var(--pg-lh);color:var(--pg-text);}
 .page-body.mono-empty{font-family:'IBM Plex Sans KR',sans-serif;font-size:13.5px;color:#8a8368;white-space:normal;}
+.reader-para{margin:0 0 var(--pg-pg);}
+.reader-para:last-child{margin-bottom:0;}
 .split{display:grid;grid-template-columns:1fr 1fr;gap:28px;}
-.split .col h4{font-family:'IBM Plex Mono',monospace;font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--brass);margin:0 0 10px;}
-.split .col{border-left:1px dashed var(--paper-line);padding-left:24px;}
+.split .col h4{font-family:'IBM Plex Mono',monospace;font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--pg-accent);margin:0 0 10px;}
+.split .col{border-left:1px dashed var(--pg-line);padding-left:24px;}
 .split .col:first-child{border-left:none;padding-left:0;}
-@media (max-width:720px){.split{grid-template-columns:1fr;}.split .col{border-left:none;padding-left:0;border-top:1px dashed var(--paper-line);padding-top:16px;}}
+.split .col-body{font-family:'Newsreader',serif;font-size:var(--pg-fs);line-height:var(--pg-lh);color:var(--pg-text);}
+@media (max-width:720px){.split{grid-template-columns:1fr;}.split .col{border-left:none;padding-left:0;border-top:1px dashed var(--pg-line);padding-top:16px;}}
+
+.reader-prefs-panel{
+  display:none;gap:14px;flex-wrap:wrap;align-items:center;
+  background:#232920;border:1px solid #3a4139;border-radius:6px;
+  padding:10px 12px;margin-bottom:10px;font-size:11.5px;color:var(--text-dim);
+}
+.reader-prefs-panel.show{display:flex;}
+.reader-prefs-panel .pref{display:flex;align-items:center;gap:6px;}
+.reader-prefs-panel input[type=range]{width:100px;accent-color:var(--brass);}
+.reader-prefs-panel select{background:#151915;border:1px solid #3a4139;color:var(--paper);border-radius:3px;padding:4px 6px;font-size:11.5px;}
+.reader-prefs-panel .pref-val{color:var(--paper);min-width:34px;display:inline-block;}
 
 .pagenav{display:flex;justify-content:space-between;align-items:center;margin-top:16px;gap:10px;}
 .pagenav .btn{flex:1;text-align:center;}
@@ -249,10 +274,38 @@ a{color:var(--brass-soft);}
     <div class="progress-track" id="progressTrack"><div class="progress-fill" id="progressFill"></div></div>
 
     <div class="page-wrap">
-      <div class="viewtabs">
-        <button class="active" data-view="translated">번역</button>
-        <button data-view="original">원문</button>
-        <button data-view="split">나란히 보기</button>
+      <div class="viewtabs-row">
+        <div class="viewtabs">
+          <button class="active" data-view="translated">번역</button>
+          <button data-view="original">원문</button>
+          <button data-view="split">나란히 보기</button>
+        </div>
+        <button class="btn btn-icon" id="readerPrefsBtn" title="보기 설정">Aa 설정</button>
+      </div>
+      <div class="reader-prefs-panel" id="readerPrefsPanel">
+        <div class="pref">
+          <label>테마</label>
+          <select id="prefTheme">
+            <option value="paper">종이</option>
+            <option value="sepia">세피아</option>
+            <option value="dark">다크</option>
+          </select>
+        </div>
+        <div class="pref">
+          <label>글자 크기</label>
+          <input type="range" id="prefFontSize" min="14" max="26" step="1">
+          <span class="pref-val" id="prefFontSizeVal"></span>
+        </div>
+        <div class="pref">
+          <label>줄 간격</label>
+          <input type="range" id="prefLineHeight" min="1.3" max="2.4" step="0.1">
+          <span class="pref-val" id="prefLineHeightVal"></span>
+        </div>
+        <div class="pref">
+          <label>문단 간격</label>
+          <input type="range" id="prefParaGap" min="0.2" max="2.4" step="0.1">
+          <span class="pref-val" id="prefParaGapVal"></span>
+        </div>
       </div>
       <div class="page" id="pageEl">
         <div class="page-title" id="pageTitle">시작하려면 URL을 불러오세요</div>
@@ -348,7 +401,7 @@ a{color:var(--brass-soft);}
     <div class="two-col">
       <div class="field">
         <label>Gemini 모델명</label>
-        <input id="geminiModel" type="text" value="gemini-2.5-flash">
+        <input id="geminiModel" type="text" value="gemini-3.6-flash">
       </div>
       <div class="field">
         <label>번역 대상 언어</label>
@@ -447,7 +500,7 @@ a{color:var(--brass-soft);}
 const memory = {
   apiKeys: [],
   keyIndex: 0,
-  geminiModel: 'gemini-2.5-flash',
+  geminiModel: 'gemini-3.6-flash',
   targetLang: 'ko',
   targetLangName: '한국어',
   corsProxyTemplate: 'https://api.allorigins.win/raw?url={url}',
@@ -457,6 +510,7 @@ const LS_PROFILES = 'tr_profiles_v1';
 const LS_LAST = 'tr_last_v1';
 const LS_SETTINGS = 'tr_settings_v1';
 const LS_BOOKS = 'tr_books_v1';
+const LS_READER = 'tr_reader_prefs_v1';
 const PROXY_FALLBACKS = [
   'https://api.allorigins.win/raw?url={url}',
   'https://corsproxy.io/?url={url}'
@@ -580,12 +634,36 @@ function setProgressPct(pct){
   f.style.width = Math.max(0,Math.min(100,pct))+'%';
 }
 
+/* ---- 읽기(보기) 설정: 폰트 크기·줄간격·문단간격·테마 ---- */
+let readerPrefs = {fontSize:18, lineHeight:1.9, paraGap:1, theme:'paper'};
+function loadReaderPrefs(){
+  try{
+    const s = JSON.parse(localStorage.getItem(LS_READER) || 'null');
+    if(s) readerPrefs = Object.assign(readerPrefs, s);
+  }catch(e){}
+}
+function saveReaderPrefs(){ try{ localStorage.setItem(LS_READER, JSON.stringify(readerPrefs)); }catch(e){} }
+function applyReaderPrefs(){
+  const pg = document.getElementById('pageEl');
+  pg.style.setProperty('--pg-fs', readerPrefs.fontSize+'px');
+  pg.style.setProperty('--pg-lh', String(readerPrefs.lineHeight));
+  pg.style.setProperty('--pg-pg', readerPrefs.paraGap+'em');
+  pg.setAttribute('data-theme', readerPrefs.theme);
+  document.getElementById('prefTheme').value = readerPrefs.theme;
+  document.getElementById('prefFontSize').value = readerPrefs.fontSize;
+  document.getElementById('prefFontSizeVal').textContent = readerPrefs.fontSize+'px';
+  document.getElementById('prefLineHeight').value = readerPrefs.lineHeight;
+  document.getElementById('prefLineHeightVal').textContent = readerPrefs.lineHeight;
+  document.getElementById('prefParaGap').value = readerPrefs.paraGap;
+  document.getElementById('prefParaGapVal').textContent = readerPrefs.paraGap+'em';
+}
+
 /* =========================================================================
    설정 읽기/저장
    ========================================================================= */
 function readSettingsFromDom(){
   const apiKeys = document.getElementById('apiKeys').value.split('\n').map(s=>s.trim()).filter(Boolean);
-  const geminiModel = document.getElementById('geminiModel').value.trim() || 'gemini-2.5-flash';
+  const geminiModel = document.getElementById('geminiModel').value.trim() || 'gemini-3.6-flash';
   const targetLang = document.getElementById('targetLang').value;
   const proxySel = document.getElementById('corsProxy').value;
   const corsProxyTemplate = proxySel === 'custom'
@@ -1155,6 +1233,22 @@ function upsertChapter(entry){
   renderBookList();
 }
 
+function fillParagraphs(container, text){
+  container.innerHTML = '';
+  const paras = (text||'').split(/\n{2,}/).map(s=>s.trim()).filter(Boolean);
+  if(!paras.length){ return; }
+  paras.forEach(p=>{
+    const el = document.createElement('p');
+    el.className = 'reader-para';
+    const lines = p.split('\n');
+    lines.forEach((line,i)=>{
+      if(i>0) el.appendChild(document.createElement('br'));
+      el.appendChild(document.createTextNode(line));
+    });
+    container.appendChild(el);
+  });
+}
+
 function renderPage(entry){
   document.getElementById('pageTitle').textContent = entry.title || entry.url;
   document.getElementById('pageRibbon').textContent = entry.page ? ('# '+entry.page) : '—';
@@ -1168,17 +1262,19 @@ function renderPage(entry){
       splitDiv = document.createElement('div');
       splitDiv.className = 'split';
       pageEl.appendChild(splitDiv);
+      splitDiv.innerHTML = `
+        <div class="col"><h4>원문</h4><div class="col-body" id="colOriginal"></div></div>
+        <div class="col"><h4>번역</h4><div class="col-body" id="colTranslated"></div></div>
+      `;
     }
     splitDiv.style.display = 'grid';
-    splitDiv.innerHTML = `
-      <div class="col"><h4>원문</h4><div style="white-space:pre-wrap;">${escapeHtml(entry.original)}</div></div>
-      <div class="col"><h4>번역</h4><div style="white-space:pre-wrap;">${escapeHtml(entry.translated)}</div></div>
-    `;
+    fillParagraphs(splitDiv.querySelector('#colOriginal'), entry.original);
+    fillParagraphs(splitDiv.querySelector('#colTranslated'), entry.translated);
   } else {
     const splitDiv = pageEl.querySelector('.split');
     if(splitDiv) splitDiv.style.display = 'none';
     bodyEl.style.display = 'block';
-    bodyEl.textContent = currentView === 'original' ? entry.original : entry.translated;
+    fillParagraphs(bodyEl, currentView === 'original' ? entry.original : entry.translated);
   }
   renderChapList();
 }
@@ -1347,6 +1443,22 @@ document.querySelectorAll('.viewtabs button').forEach(b=>{
     const c = currentChapter();
     if(c) renderPage(c);
   };
+});
+
+document.getElementById('readerPrefsBtn').onclick = ()=>{
+  document.getElementById('readerPrefsPanel').classList.toggle('show');
+};
+document.getElementById('prefTheme').addEventListener('change', e=>{
+  readerPrefs.theme = e.target.value; applyReaderPrefs(); saveReaderPrefs();
+});
+document.getElementById('prefFontSize').addEventListener('input', e=>{
+  readerPrefs.fontSize = Number(e.target.value); applyReaderPrefs(); saveReaderPrefs();
+});
+document.getElementById('prefLineHeight').addEventListener('input', e=>{
+  readerPrefs.lineHeight = Number(e.target.value); applyReaderPrefs(); saveReaderPrefs();
+});
+document.getElementById('prefParaGap').addEventListener('input', e=>{
+  readerPrefs.paraGap = Number(e.target.value); applyReaderPrefs(); saveReaderPrefs();
 });
 
 function onProfileChange(e){
@@ -1545,6 +1657,8 @@ document.getElementById('deleteProfBtn').onclick = ()=>{
 (function init(){
   loadProfiles();
   loadBooks();
+  loadReaderPrefs();
+  applyReaderPrefs();
   restoreSettingsToDom();
   syncSettings();
   let last = null;
