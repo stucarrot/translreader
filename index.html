@@ -398,6 +398,11 @@ a{color:var(--brass-soft);}
       <div class="hint">첫 번째 키가 실패(할당량 초과·오류)하면 다음 키로 자동 전환됩니다. 모든 키가 실패하면 <b>구글 번역</b>으로 자동 대체됩니다. 키를 하나도 입력하지 않으면 처음부터 구글 번역만 사용합니다.</div>
       <div id="keyTestResult" style="display:none;font-family:'IBM Plex Mono',monospace;font-size:11px;background:#151915;border:1px solid #3a4139;border-radius:4px;padding:8px;margin-top:8px;white-space:pre-wrap;max-height:140px;overflow-y:auto;"></div>
     </div>
+    <div class="field">
+      <label>Gemini 번역 프롬프트 <button class="btn small-btn" id="resetPromptBtn" style="float:right;padding:2px 8px;">기본값으로</button></label>
+      <textarea id="promptTemplate" style="min-height:150px;"></textarea>
+      <div class="hint"><code>{lang}</code>는 번역 대상 언어로, <code>{text}</code>는 원문 조각으로 자동 치환됩니다. 대사 개행 방식, 존댓말/반말, 용어 통일 규칙 등을 자유롭게 수정하세요. (구글 번역 폴백에는 적용되지 않고 Gemini 호출에만 적용됩니다.)</div>
+    </div>
     <div class="two-col">
       <div class="field">
         <label>Gemini 모델명</label>
@@ -497,6 +502,18 @@ a{color:var(--brass-soft);}
 /* =========================================================================
    상태
    ========================================================================= */
+const DEFAULT_PROMPT_TEMPLATE =
+`다음은 러시아어 웹소설 본문 일부이다. 이를 자연스럽고 매끄러운 {lang}로 번역하라.
+- 인명·지명 등 고유명사는 처음 등장할 때의 표기를 문서 전체에서 일관되게 사용하라.
+- 러시아어 이름에 부칭(patronymic)이나 애칭(지소형)이 나오면 어색하게 직역하지 말고 자연스럽게 살려라.
+- 큰따옴표나 —(줄표)로 표시된 대사는 한국 웹소설 관례처럼 대사 하나마다 줄을 바꿔 별도 문단으로 배치하라. 지문(서술)과 대사가 이어질 때도 자연스럽게 개행하라.
+- 대화체와 어투, 감정선을 살리고 지나친 직역투는 피하라.
+- 문단 구분(빈 줄)은 그대로 유지하라.
+- 번역문 이외의 설명, 주석, 원문 병기는 절대 출력하지 마라.
+
+본문:
+{text}`;
+
 const memory = {
   apiKeys: [],
   keyIndex: 0,
@@ -504,6 +521,7 @@ const memory = {
   targetLang: 'ko',
   targetLangName: '한국어',
   corsProxyTemplate: 'https://api.allorigins.win/raw?url={url}',
+  promptTemplate: DEFAULT_PROMPT_TEMPLATE,
 };
 
 const LS_PROFILES = 'tr_profiles_v1';
@@ -669,10 +687,12 @@ function readSettingsFromDom(){
   const corsProxyTemplate = proxySel === 'custom'
     ? (document.getElementById('corsProxyCustom').value.trim() || PROXY_FALLBACKS[0])
     : proxySel;
+  const promptTemplate = document.getElementById('promptTemplate').value.trim() || DEFAULT_PROMPT_TEMPLATE;
   return {
     apiKeys, geminiModel, targetLang,
     targetLangName: LANG_NAMES[targetLang] || targetLang,
-    corsProxyTemplate
+    corsProxyTemplate,
+    promptTemplate
   };
 }
 function syncSettings(){
@@ -684,7 +704,8 @@ function syncSettings(){
       geminiModel: s.geminiModel,
       targetLang: s.targetLang,
       corsProxySel: document.getElementById('corsProxy').value,
-      corsProxyCustom: document.getElementById('corsProxyCustom').value
+      corsProxyCustom: document.getElementById('corsProxyCustom').value,
+      promptTemplate: s.promptTemplate
     }));
   }catch(e){ console.warn('설정 저장 실패', e); }
   return s;
@@ -692,6 +713,7 @@ function syncSettings(){
 function restoreSettingsToDom(){
   let saved = null;
   try{ saved = JSON.parse(localStorage.getItem(LS_SETTINGS) || 'null'); }catch(e){}
+  document.getElementById('promptTemplate').value = (saved && saved.promptTemplate) ? saved.promptTemplate : DEFAULT_PROMPT_TEMPLATE;
   if(!saved) return;
   if(saved.apiKeys && saved.apiKeys.length) document.getElementById('apiKeys').value = saved.apiKeys.join('\n');
   if(saved.geminiModel) document.getElementById('geminiModel').value = saved.geminiModel;
@@ -912,7 +934,8 @@ function chunkText(text, maxLen=3500){
 }
 
 async function translateChunkGemini(chunk, key){
-  const prompt = `다음은 소설 본문 일부이다. 이것을 자연스러운 ${memory.targetLangName}로 번역하라. 문단 구분(빈 줄)을 그대로 유지하고, 대화체와 어감을 살려라. 번역문 이외의 설명, 주석, 원문 병기는 절대 출력하지 마라.\n\n${chunk}`;
+  const tpl = memory.promptTemplate || DEFAULT_PROMPT_TEMPLATE;
+  const prompt = tpl.split('{lang}').join(memory.targetLangName).split('{text}').join(chunk);
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(memory.geminiModel)}:generateContent?key=${encodeURIComponent(key)}`;
   const bodyStr = JSON.stringify({
     contents:[{parts:[{text:prompt}]}],
@@ -1346,7 +1369,23 @@ async function gotoPage(delta){
   if(nextPage < 1){ toast('첫 화입니다.'); return; }
   const nextUrl = buildUrlForPage(profile, ids.id, nextPage);
   setUrlInputs(nextUrl);
-  await loadAndTranslate(nextUrl);
+  await loadOrCached(nextUrl);
+}
+
+/* 이미 번역된 화면(같은 URL)이 캐시에 있으면 재요청/재번역 없이 그대로 불러온다.
+   강제로 다시 번역하고 싶으면 '이 화면 다시 번역' 버튼(loadAndTranslate 직접 호출)을 쓴다. */
+async function loadOrCached(url, {silent}={}){
+  const cached = chapters.find(c=>c.url===url);
+  if(cached){
+    currentUrl = url;
+    renderPage(cached);
+    setStatus('완료 (캐시됨, 재번역 안 함)', 'ok');
+    setLastError('');
+    saveLast();
+    if(!silent) toast('이미 번역된 화입니다: '+cached.title, 2000);
+    return cached;
+  }
+  return await loadAndTranslate(url, {silent});
 }
 
 function setUrlInputs(url){
@@ -1363,13 +1402,18 @@ async function batchContinue(){
   for(let i=0;i<n;i++){
     const ids = extractIdAndPage(profile, url);
     if(!ids) break;
-    setStatus(`이어받기 (${i+1}/${n})…`, 'busy');
-    const entry = await loadAndTranslate(url, {silent:true});
-    if(!entry) break;
-    toast(`(${i+1}/${n}) 완료: ${entry.title}`, 1500);
+    const already = chapters.find(c=>c.url===url);
+    if(already){
+      toast(`(${i+1}/${n}) 이미 번역됨, 건너뜀: ${already.title}`, 1200);
+    } else {
+      setStatus(`이어받기 (${i+1}/${n})…`, 'busy');
+      const entry = await loadAndTranslate(url, {silent:true});
+      if(!entry) break;
+      toast(`(${i+1}/${n}) 완료: ${entry.title}`, 1500);
+      await sleep(400);
+    }
     const nextPage = parseInt(ids.page,10) + profile.step;
     url = buildUrlForPage(profile, ids.id, nextPage);
-    await sleep(400);
   }
   setUrlInputs(url);
   toast('이어받기 종료. 보관함에서 확인하세요.');
@@ -1391,7 +1435,7 @@ async function doLoad(url){
   if(profile){ currentProfileId = profile.id; renderProfileSelect(); renderProfileSummary(); }
   updateBookKey(url);
   restoreChapters();
-  await loadAndTranslate(url);
+  await loadOrCached(url);
   setMobileTab('reader');
 }
 
@@ -1518,6 +1562,12 @@ document.getElementById('clearKeysBtn').onclick = ()=>{
   document.getElementById('keyTestResult').style.display = 'none';
   syncSettings();
   toast('API 키를 삭제했습니다.');
+};
+document.getElementById('resetPromptBtn').onclick = (e)=>{
+  e.preventDefault();
+  document.getElementById('promptTemplate').value = DEFAULT_PROMPT_TEMPLATE;
+  syncSettings();
+  toast('프롬프트를 기본값으로 되돌렸습니다.');
 };
 
 /* =========================================================================
