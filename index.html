@@ -169,6 +169,11 @@ a{color:var(--brass-soft);}
 
 .pagenav{display:flex;justify-content:space-between;align-items:center;margin-top:16px;gap:10px;}
 .pagenav .btn{flex:1;text-align:center;}
+.parts-bar{
+  display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;
+  background:#232920;border:1px solid var(--brass);border-radius:6px;
+  padding:9px 12px;margin-top:12px;font-size:12px;color:var(--brass-soft);
+}
 
 /* ---------- side panel ---------- */
 .side h3{font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--brass-soft);margin:0 0 10px;display:flex;align-items:center;justify-content:space-between;}
@@ -345,6 +350,10 @@ a{color:var(--brass-soft);}
       <div class="page" id="pageEl">
         <div class="page-title" id="pageTitle">시작하려면 URL을 불러오세요</div>
         <div class="page-body mono-empty" id="pageBody">사이트 유형을 선택하거나 새로 등록한 뒤, 상단(모바일은 하단 '사이트' 탭)에 회차 URL을 붙여넣고 <b>불러오기</b>를 누르세요.</div>
+      </div>
+      <div class="parts-bar" id="partsBar" style="display:none;">
+        <span id="partsInfo"></span>
+        <button class="btn btn-primary small-btn" id="continuePartBtn">계속 번역</button>
       </div>
       <div class="pagenav">
         <button class="btn" id="prevBtn2">← 이전화</button>
@@ -622,6 +631,21 @@ function defaultProfiles(){
       contentSel: '',
       titleSel: '',
       removeSel: 'script, style, nav, header, footer, form'
+    },
+    {
+      id: 'militera_lib_ru',
+      name: 'Militera.lib.ru (군사 회고록)',
+      hostname: 'militera.lib.ru',
+      idLoc: {type:'path', index:2, prefix:'', suffix:''},
+      pageLoc: {type:'path', index:3, prefix:'', suffix:'.html'},
+      pagePad: 2,
+      urlTemplate: 'https://militera.lib.ru/memo/russian/{id}/{page}.html',
+      step: 1,
+      mode: 'reader',
+      contentSel: '',
+      titleSel: '',
+      removeSel: 'script, style, nav, header, footer, form',
+      promptTemplate: ''
     }
   ];
 }
@@ -819,27 +843,39 @@ function analyzeUrl(urlStr){
   const cands = [];
   const segs = u.pathname.split('/').filter(Boolean);
   segs.forEach((seg,i)=>{
-    if(/^\d+$/.test(seg)){
-      cands.push({type:'path', index:i, value:seg, label:`경로[${i+1}] = ${seg}`});
+    const m = seg.match(/^(\D*?)(\d+)(\D*)$/);
+    if(m){
+      // "01.html" 처럼 접두/접미가 붙은 숫자도 페이지 후보로 인식 (숫자 부분만 증감)
+      cands.push({type:'path', index:i, prefix:m[1], digits:m[2], suffix:m[3], value:m[2], label:`경로[${i+1}] = ${seg}`, canPage:true});
+    } else {
+      // 숫자가 없는 조각(작품 슬러그 등)은 작품ID 후보로만 사용 가능
+      cands.push({type:'path', index:i, prefix:'', digits:null, suffix:'', value:seg, label:`경로[${i+1}] = ${seg}`, canPage:false});
     }
   });
   for(const [k,v] of u.searchParams.entries()){
     if(/^\d+$/.test(v)){
-      cands.push({type:'query', key:k, value:v, label:`쿼리 ${k} = ${v}`});
+      cands.push({type:'query', key:k, value:v, label:`쿼리 ${k} = ${v}`, canPage:true});
+    } else if(v){
+      cands.push({type:'query', key:k, value:v, label:`쿼리 ${k} = ${v}`, canPage:false});
     }
   }
   return {url:u, cands};
 }
 
 function buildProfileFromChoice(u, cands, idPick, pagePick, name, step, mode, contentSel, titleSel, removeSel){
-  const idLoc = idPick ? (idPick.type==='query' ? {type:'query', key:idPick.key} : {type:'path', index:idPick.index}) : null;
-  const pageLoc = pagePick ? (pagePick.type==='query' ? {type:'query', key:pagePick.key} : {type:'path', index:pagePick.index}) : null;
-  if(!pageLoc) return null;
+  if(!pagePick || pagePick.canPage===false) return null;
+  const idLoc = idPick
+    ? (idPick.type==='query' ? {type:'query', key:idPick.key} : {type:'path', index:idPick.index, prefix:idPick.prefix||'', suffix:idPick.suffix||''})
+    : null;
+  const pageLoc = pagePick.type==='query'
+    ? {type:'query', key:pagePick.key}
+    : {type:'path', index:pagePick.index, prefix:pagePick.prefix||'', suffix:pagePick.suffix||''};
+  const pagePad = (pagePick.digits && pagePick.digits.length>1 && pagePick.digits[0]==='0') ? pagePick.digits.length : 0;
 
   const segs = u.pathname.split('/').filter(Boolean);
   const tplSegs = segs.map((seg,i)=>{
-    if(idLoc && idLoc.type==='path' && idLoc.index===i) return '{id}';
-    if(pageLoc.type==='path' && pageLoc.index===i) return '{page}';
+    if(idLoc && idLoc.type==='path' && idLoc.index===i) return (idLoc.prefix||'') + '{id}' + (idLoc.suffix||'');
+    if(pageLoc.type==='path' && pageLoc.index===i) return (pageLoc.prefix||'') + '{page}' + (pageLoc.suffix||'');
     return seg;
   });
   const search = new URLSearchParams(u.search);
@@ -857,6 +893,7 @@ function buildProfileFromChoice(u, cands, idPick, pagePick, name, step, mode, co
     hostname: u.hostname,
     idLoc: idLoc || {type:'query', key:'__none__'},
     pageLoc,
+    pagePad,
     urlTemplate: template,
     step: Number(step)||1,
     mode: mode,
@@ -870,6 +907,13 @@ function buildUrlForPage(profile, idValue, pageValue){
   return profile.urlTemplate.replace('{id}', idValue).replace('{page}', pageValue);
 }
 
+/* 페이지 번호를 원래 자릿수(예: 01, 02 ...)에 맞춰 0으로 채운다. pagePad가 없는(기존) 프로필은 그대로 둔다. */
+function formatPage(profile, n){
+  const s = String(n);
+  if(profile.pagePad && s.length < profile.pagePad) return s.padStart(profile.pagePad, '0');
+  return s;
+}
+
 function extractIdAndPage(profile, urlStr){
   let u;
   try{ u = new URL(urlStr); }catch(e){ return null; }
@@ -878,7 +922,13 @@ function extractIdAndPage(profile, urlStr){
     if(loc.type==='query') return u.searchParams.get(loc.key);
     if(loc.type==='path'){
       const segs = u.pathname.split('/').filter(Boolean);
-      return segs[loc.index];
+      const seg = segs[loc.index];
+      if(seg===undefined) return null;
+      if(loc.prefix || loc.suffix){
+        if(!seg.startsWith(loc.prefix) || !seg.endsWith(loc.suffix)) return null;
+        return seg.slice(loc.prefix.length, seg.length - loc.suffix.length);
+      }
+      return seg;
     }
     return null;
   }
@@ -991,6 +1041,47 @@ function chunkText(text, maxLen=3500){
   }
   if(cur) chunks.push(cur);
   return chunks.length ? chunks : [text];
+}
+
+/* 한 URL 안에 매우 긴 글이 통째로 들어있는 사이트 대응.
+   대략 1화 분량(기본 5000자)씩, 문장 중간이 끊기지 않도록 나눈다. */
+const LONG_PAGE_THRESHOLD = 5000;
+
+function splitLongParagraph(text, maxLen){
+  // 문장 끝(. ! ? … 및 뒤따르는 인용부호/공백) 기준으로 쪼갠다.
+  const sentences = text.match(/[^.!?…]*[.!?…]+[\s'"”»]*|[^.!?…]+$/g) || [text];
+  const out = [];
+  let buf = '';
+  for(const s of sentences){
+    if((buf+s).length > maxLen && buf){ out.push(buf); buf = s; }
+    else buf += s;
+  }
+  if(buf) out.push(buf);
+  return out;
+}
+
+function splitIntoParts(text, maxLen=LONG_PAGE_THRESHOLD){
+  const paras = (text||'').split(/\n{2,}/).map(s=>s.trim()).filter(Boolean);
+  const parts = [];
+  let cur = '';
+  const flush = ()=>{ if(cur.trim()){ parts.push(cur.trim()); cur=''; } };
+  for(const para of paras){
+    if(para.length > maxLen){
+      flush();
+      const pieces = splitLongParagraph(para, maxLen);
+      for(const piece of pieces){
+        if((cur+'\n\n'+piece).length > maxLen && cur){ flush(); cur = piece; }
+        else cur = cur ? cur+'\n\n'+piece : piece;
+      }
+    } else if((cur+'\n\n'+para).length > maxLen && cur){
+      flush();
+      cur = para;
+    } else {
+      cur = cur ? cur+'\n\n'+para : para;
+    }
+  }
+  flush();
+  return parts.length ? parts : [text];
 }
 
 async function translateChunkGemini(chunk, key, glossaryText, promptTemplate){
@@ -1326,29 +1417,22 @@ async function loadAndTranslate(url, {silent}={}){
     const ids = extractIdAndPage(profile, url);
     const {title, body} = await fetchChapter(profile, url);
 
+    const parts = body.length > LONG_PAGE_THRESHOLD ? splitIntoParts(body, LONG_PAGE_THRESHOLD) : [body];
+
     // 본문을 받자마자 화면을 그 화로 즉시 전환한다 (번역은 아직 안 끝났어도 원문/제목/이전화 위치는 바로 반영).
-    const entry = { url, page: ids?ids.page:'', title, original: body, translated: '' };
+    const entry = { url, page: ids?ids.page:'', title, original: body, translated: '', parts, translatedParts: [], partsDone: 0, partsStarted: 1 };
     registerBookIfNew(profile, ids?ids.id:null, title);
     upsertChapter(entry);
     currentUrl = url;
     renderPage(entry);
     saveLast();
+    if(parts.length > 1) toast(`이 페이지는 길어서 ${parts.length}부분으로 나눠 번역합니다. 첫 부분부터 시작합니다.`, 3500);
 
-    setStatus('번역 중…', 'busy');
     const bookKeyForThis = profile.id + '::' + (ids ? (ids.id||'x') : 'x');
     const glossaryText = getGlossaryText(bookKeyForThis);
     const effectivePrompt = (profile.promptTemplate && profile.promptTemplate.trim()) || memory.promptTemplate;
-    const translated = await translateFullText(body, (i,n)=>{
-      setStatus(`번역 중… (${i}/${n} 조각)`, 'busy');
-      setProgressPct(n ? (i/n)*100 : 0);
-    }, glossaryText, effectivePrompt, (partial)=>{
-      // 조각이 하나씩 끝날 때마다 번역 문단을 화면에 바로 채워 넣는다 (스트리밍처럼 보이게).
-      entry.translated = partial;
-      if(currentUrl === url) renderPage(entry);
-    });
-    entry.translated = translated;
-    upsertChapter(entry);
-    if(currentUrl === url) renderPage(entry);
+    await translatePart(entry, 0, {glossaryText, effectivePrompt});
+
     setStatus('완료', 'ok');
     setProgressPct(100);
     if(!silent) toast('번역 완료: '+title);
@@ -1363,6 +1447,7 @@ async function loadAndTranslate(url, {silent}={}){
   }finally{
     setBusy(false);
     setTimeout(hideProgress, 500);
+    updatePartsUI();
   }
 }
 
@@ -1372,6 +1457,79 @@ function upsertChapter(entry){
   renderChapList();
   persistChapters();
   renderBookList();
+}
+
+/* 긴 페이지를 여러 부분으로 나눠 번역할 때, 그중 한 부분을 번역한다.
+   진행 중에도 화면이 계속 갱신되도록 스트리밍 콜백을 그대로 활용한다. */
+async function translatePart(entry, partIndex, ctx){
+  entry.partsStarted = Math.max(entry.partsStarted||0, partIndex+1);
+  if(currentUrl === entry.url) renderPage(entry);
+  const isMultiPart = entry.parts && entry.parts.length > 1;
+  setStatus(isMultiPart ? `번역 중… (부분 ${partIndex+1}/${entry.parts.length})` : '번역 중…', 'busy');
+  setProgressIndeterminate();
+  const priorJoined = entry.translatedParts.slice(0, partIndex).join('\n\n');
+  const translated = await translateFullText(entry.parts[partIndex], (i,n)=>{
+    setProgressPct(n ? (i/n)*100 : 0);
+  }, ctx.glossaryText, ctx.effectivePrompt, (partial)=>{
+    entry.translated = priorJoined ? priorJoined + '\n\n' + partial : partial;
+    if(currentUrl === entry.url) renderPage(entry);
+  });
+  entry.translatedParts[partIndex] = translated;
+  entry.partsDone = Math.max(entry.partsDone, partIndex+1);
+  entry.translated = entry.translatedParts.slice(0, entry.partsDone).join('\n\n');
+  upsertChapter(entry);
+  if(currentUrl === entry.url) renderPage(entry);
+}
+
+async function continueTranslatePart(){
+  const entry = currentChapter();
+  if(!entry || !entry.parts || entry.partsDone >= entry.parts.length) return;
+  syncSettings();
+  const profile = getProfile(currentProfileId);
+  const glossaryText = getGlossaryText(currentBookKey);
+  const effectivePrompt = (profile && profile.promptTemplate && profile.promptTemplate.trim()) || memory.promptTemplate;
+  setBusy(true);
+  document.getElementById('continuePartBtn').disabled = true;
+  try{
+    const idx = entry.partsDone;
+    await translatePart(entry, idx, {glossaryText, effectivePrompt});
+    setStatus('완료', 'ok');
+    setProgressPct(100);
+    toast(`부분 ${idx+1}/${entry.parts.length} 번역 완료`, 2000);
+  }catch(e){
+    console.error(e);
+    setStatus('오류', 'err');
+    setLastError(e.message);
+    toast('부분 번역 실패: '+e.message, 5000);
+  }finally{
+    setBusy(false);
+    setTimeout(hideProgress, 500);
+    updatePartsUI();
+  }
+}
+
+/* 긴 페이지의 경우 원문도 "지금까지 시작된 부분"까지만 보여줘서, 번역 문단과 줄이 어긋나지 않게 한다. */
+function revealedOriginal(entry){
+  if(!entry.parts || entry.parts.length <= 1) return entry.original;
+  const n = Math.min(entry.partsStarted || entry.partsDone || 1, entry.parts.length);
+  return entry.parts.slice(0, n).join('\n\n');
+}
+
+function updatePartsUI(){
+  const bar = document.getElementById('partsBar');
+  const entry = currentChapter();
+  if(!entry || !entry.parts || entry.parts.length <= 1){ bar.style.display = 'none'; return; }
+  bar.style.display = 'flex';
+  document.getElementById('partsInfo').textContent =
+    `이 페이지는 길어서 ${entry.parts.length}부분으로 나눠 번역합니다 (${entry.partsDone}/${entry.parts.length} 번역됨)`;
+  const btn = document.getElementById('continuePartBtn');
+  if(entry.partsDone >= entry.parts.length){
+    btn.disabled = true;
+    btn.textContent = '모든 부분 번역 완료';
+  } else {
+    btn.disabled = busy;
+    btn.textContent = `계속 번역 (부분 ${entry.partsDone+1}/${entry.parts.length})`;
+  }
 }
 
 function splitParas(text){
@@ -1435,7 +1593,7 @@ function isMobileMode(){
 async function retranslateParagraph(url, idx, btn){
   const entry = chapters.find(c=>c.url===url);
   if(!entry) return;
-  const origParas = splitParas(entry.original);
+  const origParas = splitParas(revealedOriginal(entry));
   const transParas = splitParas(entry.translated);
   if(!origParas[idx]){ toast('원문 문단을 찾지 못했습니다.'); return; }
   if(btn) btn.classList.add('loading');
@@ -1472,6 +1630,7 @@ function renderPage(entry){
   const bodyEl = document.getElementById('pageBody');
   const pageEl = document.getElementById('pageEl');
   bodyEl.classList.remove('mono-empty');
+  const origText = revealedOriginal(entry);
   if(currentView === 'split'){
     pageEl.querySelector('.page-body') && (pageEl.querySelector('.page-body').style.display='none');
     let splitDiv = pageEl.querySelector('.split');
@@ -1483,14 +1642,14 @@ function renderPage(entry){
     splitDiv.style.display = 'block';
     if(isMobileMode()){
       splitDiv.innerHTML = `<div class="split-interleaved" id="splitInterleaved"></div>`;
-      fillInterleaved(splitDiv.querySelector('#splitInterleaved'), entry.original, entry.translated, entry.url);
+      fillInterleaved(splitDiv.querySelector('#splitInterleaved'), origText, entry.translated, entry.url);
     } else {
       splitDiv.style.display = 'grid';
       splitDiv.innerHTML = `
         <div class="col"><h4>원문</h4><div class="col-body" id="colOriginal"></div></div>
         <div class="col"><h4>번역</h4><div class="col-body" id="colTranslated"></div></div>
       `;
-      fillParagraphs(splitDiv.querySelector('#colOriginal'), entry.original);
+      fillParagraphs(splitDiv.querySelector('#colOriginal'), origText);
       fillParagraphs(splitDiv.querySelector('#colTranslated'), entry.translated, {retranslateUrl: entry.url});
     }
   } else {
@@ -1498,9 +1657,10 @@ function renderPage(entry){
     if(splitDiv) splitDiv.style.display = 'none';
     bodyEl.style.display = 'block';
     const opts = currentView === 'original' ? undefined : {retranslateUrl: entry.url};
-    fillParagraphs(bodyEl, currentView === 'original' ? entry.original : entry.translated, opts);
+    fillParagraphs(bodyEl, currentView === 'original' ? origText : entry.translated, opts);
   }
   renderChapList();
+  updatePartsUI();
 }
 
 let splitResizeTimer;
@@ -1580,7 +1740,7 @@ async function gotoPage(delta){
   if(!ids){ toast('현재 URL에서 페이지 번호를 읽지 못했습니다.'); return; }
   const nextPage = (parseInt(ids.page,10) + delta*profile.step);
   if(nextPage < 1){ toast('첫 화입니다.'); return; }
-  const nextUrl = buildUrlForPage(profile, ids.id, nextPage);
+  const nextUrl = buildUrlForPage(profile, ids.id, formatPage(profile, nextPage));
   setUrlInputs(nextUrl);
   setMobileTab('reader');
   await loadOrCached(nextUrl);
@@ -1633,7 +1793,7 @@ async function batchContinue(){
   const urls = [];
   for(let i=0;i<n;i++){
     const page = parseInt(ids0.page,10) + i*profile.step;
-    urls.push(buildUrlForPage(profile, ids0.id, page));
+    urls.push(buildUrlForPage(profile, ids0.id, formatPage(profile, page)));
   }
   let doneCount = 0;
   setStatus(`이어받기 준비 중… (동시 ${concurrency}개)`, 'busy');
@@ -1686,6 +1846,7 @@ document.getElementById('nextBtn').onclick = ()=>gotoPage(1);
 document.getElementById('prevBtn2').onclick = ()=>gotoPage(-1);
 document.getElementById('nextBtn2').onclick = ()=>gotoPage(1);
 document.getElementById('translateBtn').onclick = ()=>{ if(currentUrl) loadAndTranslate(currentUrl); };
+document.getElementById('continuePartBtn').onclick = continueTranslatePart;
 document.getElementById('batchBtn').onclick = batchContinue;
 document.getElementById('exportBtn').onclick = exportAllTxt;
 document.getElementById('clearBtn').onclick = ()=>{
@@ -1914,7 +2075,7 @@ function renderCandList(){
     <span class="cand" data-i="${i}">
       ${escapeHtml(c.label)}
       <button class="role-btn ${idPick===c?'on-id':''}" data-role="id" data-i="${i}">ID</button>
-      <button class="role-btn ${pagePick===c?'on-page':''}" data-role="page" data-i="${i}">페이지</button>
+      ${c.canPage!==false ? `<button class="role-btn ${pagePick===c?'on-page':''}" data-role="page" data-i="${i}">페이지</button>` : ''}
     </span>
   `).join('');
 }
