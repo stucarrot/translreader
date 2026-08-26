@@ -150,6 +150,12 @@ a{color:var(--brass-soft);}
 .split .col-body{font-family:'Newsreader',serif;font-size:var(--pg-fs);line-height:var(--pg-lh);color:var(--pg-text);}
 @media (max-width:720px){.split{grid-template-columns:1fr;}.split .col{border-left:none;padding-left:0;border-top:1px dashed var(--pg-line);padding-top:16px;}}
 
+.split-pair{border-top:1px dashed var(--pg-line);padding-top:14px;margin-top:14px;}
+.split-pair:first-child{border-top:none;padding-top:0;margin-top:0;}
+.split-orig-para{color:var(--text-dim);opacity:.8;font-size:calc(var(--pg-fs) * 0.92);margin-bottom:6px;}
+.split-trans-para{color:var(--pg-text);}
+.split-interleaved{display:block;}
+
 .reader-prefs-panel{
   display:none;gap:14px;flex-wrap:wrap;align-items:center;
   background:#232920;border:1px solid #3a4139;border-radius:6px;
@@ -177,6 +183,23 @@ a{color:var(--brass-soft);}
 .field textarea{font-family:'IBM Plex Mono',monospace;resize:vertical;min-height:56px;}
 .hint{font-size:11px;color:#6d7568;line-height:1.5;margin-top:6px;}
 .hint b{color:var(--brass-soft);}
+
+.glossary-row{display:flex;gap:4px;align-items:center;margin-bottom:6px;}
+.glossary-row .g-from,.glossary-row .g-to{
+  flex:1;min-width:0;background:#151915;border:1px solid #3a4139;color:var(--paper);
+  border-radius:var(--radius);padding:5px 6px;font-size:11.5px;
+}
+.glossary-row .g-arrow{color:var(--text-dim);font-size:11px;flex-shrink:0;}
+.glossary-row .g-del{background:none;border:none;color:#6d7568;font-size:12px;flex-shrink:0;padding:2px 4px;}
+.glossary-row .g-del:hover{color:var(--seal);}
+
+.para-retranslate{
+  font-size:10px;opacity:.32;border:none;background:none;color:var(--pg-accent);
+  cursor:pointer;padding:0 3px;vertical-align:middle;
+}
+.para-retranslate:hover{opacity:1;}
+.para-retranslate.loading{opacity:1;animation:spin .8s linear infinite;display:inline-block;}
+@keyframes spin{from{transform:rotate(0deg);}to{transform:rotate(360deg);}}
 
 .booklist{list-style:none;margin:0 0 4px;padding:0;font-size:12px;}
 .booklist li{padding:8px 4px;border-bottom:1px solid #2c332a;}
@@ -219,6 +242,18 @@ a{color:var(--brass-soft);}
 .footer-row{display:flex;justify-content:flex-end;gap:8px;margin-top:18px;}
 
 .toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:#232920;border:1px solid #3a4139;color:var(--paper);padding:10px 16px;border-radius:6px;font-size:12.5px;z-index:200;box-shadow:0 8px 24px rgba(0,0,0,.4);max-width:90vw;}
+
+#scrollTopBtn{
+  position:fixed;right:16px;bottom:24px;width:38px;height:38px;border-radius:50%;
+  background:var(--seal);color:#fbeee0;border:1px solid var(--seal-dark);
+  display:none;align-items:center;justify-content:center;font-size:16px;
+  box-shadow:0 4px 14px rgba(0,0,0,.4);z-index:55;cursor:pointer;opacity:.85;
+}
+#scrollTopBtn:hover{opacity:1;}
+#scrollTopBtn.show{display:flex;}
+@media (max-width:880px){
+  #scrollTopBtn{bottom:calc(var(--bottombar-h) + 14px);width:34px;height:34px;font-size:14px;right:12px;}
+}
 
 /* ---------- mobile bottom nav ---------- */
 .bottombar{
@@ -332,14 +367,28 @@ a{color:var(--brass-soft);}
         <label>연속으로 몇 화를 받아 번역할까요?</label>
         <div class="row">
           <input type="number" id="batchCount" value="5" min="1" max="200">
+          <select id="batchConcurrency" title="동시에 몇 화씩 처리할지">
+            <option value="1">순차(1개씩)</option>
+            <option value="2" selected>동시 2개</option>
+            <option value="3">동시 3개</option>
+          </select>
           <button class="btn small-btn" id="batchBtn">이어서 번역</button>
         </div>
+        <div class="hint">동시 처리 수를 올리면 빨라지지만, 무료 프록시/API 쪽 요청 제한에 걸릴 수 있습니다. 문제가 생기면 순차로 바꿔보세요.</div>
       </div>
       <ul class="chaplist" id="chapList"></ul>
       <div class="row" style="margin-top:8px;">
         <button class="btn small-btn" id="exportBtn">전체 txt 저장</button>
         <button class="btn small-btn" id="clearBtn">회차 비우기</button>
       </div>
+    </div>
+
+    <div class="side-section">
+      <h3>용어집 (현재 작품)</h3>
+      <div id="glossaryEmpty" class="hint" style="display:none;">먼저 회차를 하나 불러오면 그 작품의 용어집을 만들 수 있습니다.</div>
+      <div id="glossaryList"></div>
+      <button class="btn small-btn" id="glossaryAddBtn" style="width:100%;margin-top:6px;">+ 용어 추가</button>
+      <div class="hint">인물명 등 고유명사의 원어→번역 표기를 등록해두면, 이 작품을 번역할 때마다 프롬프트에 자동으로 포함되어 표기가 일관되게 유지됩니다.</div>
     </div>
 
     <div class="side-section">
@@ -428,6 +477,10 @@ a{color:var(--brass-soft);}
       </select>
       <input id="corsProxyCustom" type="text" style="margin-top:6px;display:none;" placeholder="https://your-proxy.com/?target={url}">
       <div class="hint">GitHub Pages는 정적 사이트라 서버가 없어서, 브라우저에서 외부 소설 사이트를 직접 읽지 못하는 경우 위 프록시를 거칩니다. <code>{url}</code> 자리에 인코딩된 원본 주소가 들어갑니다. 리더 프록시(자동 추출) 모드는 항상 r.jina.ai를 별도로 사용하므로 이 설정과 무관합니다.</div>
+      <div class="row" style="margin-top:8px;">
+        <button class="btn small-btn" id="diagBtn">연결 진단 (프록시·번역 상태 점검)</button>
+      </div>
+      <div id="diagResult" style="display:none;font-family:'IBM Plex Mono',monospace;font-size:11px;background:#151915;border:1px solid #3a4139;border-radius:4px;padding:8px;margin-top:8px;white-space:pre-wrap;max-height:160px;overflow-y:auto;"></div>
     </div>
     <div class="footer-row">
       <button class="btn btn-primary" data-close="settingsModal">저장하고 닫기</button>
@@ -488,6 +541,11 @@ a{color:var(--brass-soft);}
       </div>
     </div>
 
+    <div class="field">
+      <label>이 사이트 전용 번역 프롬프트 (선택, 비워두면 설정의 전역 프롬프트 사용)</label>
+      <textarea id="profPromptTemplate" style="min-height:100px;" placeholder="예: 일본어 웹소설용으로 다르게 쓰고 싶을 때. {lang}/{text}/{glossary} 플레이스홀더 사용 가능"></textarea>
+    </div>
+
     <div class="footer-row">
       <button class="btn" id="deleteProfBtn" style="margin-right:auto;">유형 삭제</button>
       <button class="btn" data-close="siteModal">취소</button>
@@ -497,6 +555,7 @@ a{color:var(--brass-soft);}
 </div>
 
 <div class="toast" id="toast" style="display:none;"></div>
+<button id="scrollTopBtn" title="맨 위로">↑</button>
 
 <script>
 /* =========================================================================
@@ -510,6 +569,7 @@ const DEFAULT_PROMPT_TEMPLATE =
 - 대화체와 어투, 감정선을 살리고 지나친 직역투는 피하라.
 - 문단 구분(빈 줄)은 그대로 유지하라.
 - 번역문 이외의 설명, 주석, 원문 병기는 절대 출력하지 마라.
+{glossary}
 
 본문:
 {text}`;
@@ -933,9 +993,9 @@ function chunkText(text, maxLen=3500){
   return chunks.length ? chunks : [text];
 }
 
-async function translateChunkGemini(chunk, key){
-  const tpl = memory.promptTemplate || DEFAULT_PROMPT_TEMPLATE;
-  const prompt = tpl.split('{lang}').join(memory.targetLangName).split('{text}').join(chunk);
+async function translateChunkGemini(chunk, key, glossaryText, promptTemplate){
+  const tpl = promptTemplate || memory.promptTemplate || DEFAULT_PROMPT_TEMPLATE;
+  const prompt = tpl.split('{lang}').join(memory.targetLangName).split('{glossary}').join(glossaryText||'').split('{text}').join(chunk);
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(memory.geminiModel)}:generateContent?key=${encodeURIComponent(key)}`;
   const bodyStr = JSON.stringify({
     contents:[{parts:[{text:prompt}]}],
@@ -1037,7 +1097,7 @@ function maskKey(k){ return k.length>8 ? k.slice(0,4)+'…'+k.slice(-4) : k; }
 
 let geminiExhausted = false;
 
-async function translateFullText(text, onProgress){
+async function translateFullText(text, onProgress, glossaryText, promptTemplate, onChunkDone){
   syncSettings();
   geminiExhausted = false;
   const chunks = chunkText(text);
@@ -1050,7 +1110,7 @@ async function translateFullText(text, onProgress){
       for(let attempt=0; attempt<memory.apiKeys.length; attempt++){
         const key = memory.apiKeys[memory.keyIndex % memory.apiKeys.length];
         try{
-          const t = await translateChunkGemini(chunks[i], key);
+          const t = await translateChunkGemini(chunks[i], key, glossaryText, promptTemplate);
           out.push(t);
           done = true;
           break;
@@ -1076,6 +1136,7 @@ async function translateFullText(text, onProgress){
         throw new Error('Gemini와 구글 번역 모두 실패했습니다: ' + e.message);
       }
     }
+    onChunkDone && onChunkDone(out.join('\n\n'));
   }
   onProgress && onProgress(chunks.length, chunks.length);
   return out.join('\n\n');
@@ -1108,13 +1169,15 @@ function registerBookIfNew(profile, idValue, firstChapterTitle){
   const key = profile.id + '::' + (idValue||'x');
   let b = books.find(x=>x.key===key);
   if(!b){
-    b = { key, profileId: profile.id, idValue: idValue||'', title: guessBookTitle(firstChapterTitle, profile, idValue), updatedAt: Date.now() };
+    b = { key, profileId: profile.id, idValue: idValue||'', title: guessBookTitle(firstChapterTitle, profile, idValue), updatedAt: Date.now(), glossary: [] };
     books.push(b);
   } else {
     b.updatedAt = Date.now();
+    if(!b.glossary) b.glossary = [];
   }
   saveBooks();
   renderBookList();
+  renderGlossary();
   return b;
 }
 
@@ -1166,8 +1229,52 @@ function openBook(key){
     saveLast();
   }
   renderBookList();
+  renderGlossary();
   setMobileTab('chapters');
 }
+
+/* ---- 용어집 (작품별 고유명사 표기 통일) ---- */
+function currentBook(){ return books.find(b=>b.key===currentBookKey); }
+
+function getGlossaryText(bookKey){
+  const b = books.find(x=>x.key===bookKey);
+  if(!b || !b.glossary || !b.glossary.length) return '';
+  const lines = b.glossary.filter(g=>g.from && g.from.trim()).map(g=>`- ${g.from.trim()} → ${(g.to||'').trim()}`);
+  if(!lines.length) return '';
+  return '다음 용어집을 참고해 표기를 통일하라:\n' + lines.join('\n');
+}
+
+function renderGlossary(){
+  const wrap = document.getElementById('glossaryList');
+  const empty = document.getElementById('glossaryEmpty');
+  const b = currentBook();
+  if(!wrap) return;
+  if(!b){
+    wrap.innerHTML = '';
+    if(empty) empty.style.display = 'block';
+    return;
+  }
+  if(empty) empty.style.display = 'none';
+  const glossary = b.glossary || [];
+  wrap.innerHTML = glossary.map((g,i)=>`
+    <div class="glossary-row" data-i="${i}">
+      <input type="text" class="g-from" placeholder="원어 표현" value="${escapeHtml(g.from||'')}">
+      <span class="g-arrow">→</span>
+      <input type="text" class="g-to" placeholder="번역 표기" value="${escapeHtml(g.to||'')}">
+      <button class="g-del" title="삭제" data-i="${i}">✕</button>
+    </div>
+  `).join('');
+}
+
+function addGlossaryRow(){
+  const b = currentBook();
+  if(!b){ toast('먼저 회차를 하나 불러와 작품을 만든 뒤 용어집을 추가할 수 있습니다.'); return; }
+  b.glossary = b.glossary || [];
+  b.glossary.push({from:'', to:''});
+  saveBooks();
+  renderGlossary();
+}
+
 
 function renderBookList(){
   const ul = document.getElementById('bookList');
@@ -1218,19 +1325,30 @@ async function loadAndTranslate(url, {silent}={}){
   try{
     const ids = extractIdAndPage(profile, url);
     const {title, body} = await fetchChapter(profile, url);
-    setStatus('번역 중…', 'busy');
-    const translated = await translateFullText(body, (i,n)=>{
-      setStatus(`번역 중… (${i}/${n} 조각)`, 'busy');
-      setProgressPct(n ? (i/n)*100 : 0);
-    });
-    const entry = { url, page: ids?ids.page:'', title, original: body, translated };
-    if(!currentBookKey || currentBookKey.split('::')[0] !== profile.id){
-      // book context may not match yet (e.g. first load) — ensure it's set
-    }
+
+    // 본문을 받자마자 화면을 그 화로 즉시 전환한다 (번역은 아직 안 끝났어도 원문/제목/이전화 위치는 바로 반영).
+    const entry = { url, page: ids?ids.page:'', title, original: body, translated: '' };
     registerBookIfNew(profile, ids?ids.id:null, title);
     upsertChapter(entry);
     currentUrl = url;
     renderPage(entry);
+    saveLast();
+
+    setStatus('번역 중…', 'busy');
+    const bookKeyForThis = profile.id + '::' + (ids ? (ids.id||'x') : 'x');
+    const glossaryText = getGlossaryText(bookKeyForThis);
+    const effectivePrompt = (profile.promptTemplate && profile.promptTemplate.trim()) || memory.promptTemplate;
+    const translated = await translateFullText(body, (i,n)=>{
+      setStatus(`번역 중… (${i}/${n} 조각)`, 'busy');
+      setProgressPct(n ? (i/n)*100 : 0);
+    }, glossaryText, effectivePrompt, (partial)=>{
+      // 조각이 하나씩 끝날 때마다 번역 문단을 화면에 바로 채워 넣는다 (스트리밍처럼 보이게).
+      entry.translated = partial;
+      if(currentUrl === url) renderPage(entry);
+    });
+    entry.translated = translated;
+    upsertChapter(entry);
+    if(currentUrl === url) renderPage(entry);
     setStatus('완료', 'ok');
     setProgressPct(100);
     if(!silent) toast('번역 완료: '+title);
@@ -1256,21 +1374,97 @@ function upsertChapter(entry){
   renderBookList();
 }
 
-function fillParagraphs(container, text){
-  container.innerHTML = '';
-  const paras = (text||'').split(/\n{2,}/).map(s=>s.trim()).filter(Boolean);
-  if(!paras.length){ return; }
-  paras.forEach(p=>{
-    const el = document.createElement('p');
-    el.className = 'reader-para';
-    const lines = p.split('\n');
-    lines.forEach((line,i)=>{
-      if(i>0) el.appendChild(document.createElement('br'));
-      el.appendChild(document.createTextNode(line));
-    });
-    container.appendChild(el);
-  });
+function splitParas(text){
+  return (text||'').split(/\n{2,}/).map(s=>s.trim()).filter(Boolean);
 }
+
+function buildParaEl(paraText, idx, opts){
+  const el = document.createElement('p');
+  el.className = 'reader-para';
+  const lines = paraText.split('\n');
+  lines.forEach((line,i)=>{
+    if(i>0) el.appendChild(document.createElement('br'));
+    el.appendChild(document.createTextNode(line));
+  });
+  if(opts && opts.retranslateUrl){
+    el.appendChild(document.createTextNode(' '));
+    const btn = document.createElement('button');
+    btn.className = 'para-retranslate';
+    btn.textContent = '↻';
+    btn.title = '이 문단만 다시 번역';
+    btn.setAttribute('data-para-idx', idx);
+    btn.setAttribute('data-para-url', opts.retranslateUrl);
+    el.appendChild(btn);
+  }
+  return el;
+}
+
+function fillParagraphs(container, text, opts){
+  container.innerHTML = '';
+  const paras = splitParas(text);
+  if(!paras.length){ return; }
+  paras.forEach((p,idx)=> container.appendChild(buildParaEl(p, idx, opts)));
+}
+
+/* 모바일 나란히 보기: 원문 문단 바로 아래 번역 문단을 짝지어 보여준다 */
+function fillInterleaved(container, original, translated, retranslateUrl){
+  container.innerHTML = '';
+  const origParas = splitParas(original);
+  const transParas = splitParas(translated);
+  const max = Math.max(origParas.length, transParas.length);
+  for(let i=0;i<max;i++){
+    const pair = document.createElement('div');
+    pair.className = 'split-pair';
+    if(origParas[i]!==undefined){
+      const o = buildParaEl(origParas[i], i, null);
+      o.classList.add('split-orig-para');
+      pair.appendChild(o);
+    }
+    if(transParas[i]!==undefined){
+      const t = buildParaEl(transParas[i], i, {retranslateUrl});
+      t.classList.add('split-trans-para');
+      pair.appendChild(t);
+    }
+    container.appendChild(pair);
+  }
+}
+function isMobileMode(){
+  return window.matchMedia && window.matchMedia('(max-width:880px)').matches;
+}
+
+async function retranslateParagraph(url, idx, btn){
+  const entry = chapters.find(c=>c.url===url);
+  if(!entry) return;
+  const origParas = splitParas(entry.original);
+  const transParas = splitParas(entry.translated);
+  if(!origParas[idx]){ toast('원문 문단을 찾지 못했습니다.'); return; }
+  if(btn) btn.classList.add('loading');
+  syncSettings();
+  try{
+    const profile = getProfile(currentProfileId);
+    const glossaryText = getGlossaryText(currentBookKey);
+    const effectivePrompt = profile && (profile.promptTemplate && profile.promptTemplate.trim()) || memory.promptTemplate;
+    const result = await translateFullText(origParas[idx], null, glossaryText, effectivePrompt);
+    if(idx < transParas.length) transParas[idx] = result;
+    else transParas.push(result);
+    entry.translated = transParas.join('\n\n');
+    upsertChapter(entry);
+    if(currentUrl === url) renderPage(entry);
+    toast('문단을 다시 번역했습니다.', 1800);
+  }catch(e){
+    toast('문단 재번역 실패: '+e.message, 4500);
+  }finally{
+    if(btn) btn.classList.remove('loading');
+  }
+}
+
+document.addEventListener('click', (e)=>{
+  const btn = e.target.closest('.para-retranslate');
+  if(!btn) return;
+  const idx = Number(btn.getAttribute('data-para-idx'));
+  const url = btn.getAttribute('data-para-url');
+  retranslateParagraph(url, idx, btn);
+});
 
 function renderPage(entry){
   document.getElementById('pageTitle').textContent = entry.title || entry.url;
@@ -1285,22 +1479,41 @@ function renderPage(entry){
       splitDiv = document.createElement('div');
       splitDiv.className = 'split';
       pageEl.appendChild(splitDiv);
+    }
+    splitDiv.style.display = 'block';
+    if(isMobileMode()){
+      splitDiv.innerHTML = `<div class="split-interleaved" id="splitInterleaved"></div>`;
+      fillInterleaved(splitDiv.querySelector('#splitInterleaved'), entry.original, entry.translated, entry.url);
+    } else {
+      splitDiv.style.display = 'grid';
       splitDiv.innerHTML = `
         <div class="col"><h4>원문</h4><div class="col-body" id="colOriginal"></div></div>
         <div class="col"><h4>번역</h4><div class="col-body" id="colTranslated"></div></div>
       `;
+      fillParagraphs(splitDiv.querySelector('#colOriginal'), entry.original);
+      fillParagraphs(splitDiv.querySelector('#colTranslated'), entry.translated, {retranslateUrl: entry.url});
     }
-    splitDiv.style.display = 'grid';
-    fillParagraphs(splitDiv.querySelector('#colOriginal'), entry.original);
-    fillParagraphs(splitDiv.querySelector('#colTranslated'), entry.translated);
   } else {
     const splitDiv = pageEl.querySelector('.split');
     if(splitDiv) splitDiv.style.display = 'none';
     bodyEl.style.display = 'block';
-    fillParagraphs(bodyEl, currentView === 'original' ? entry.original : entry.translated);
+    const opts = currentView === 'original' ? undefined : {retranslateUrl: entry.url};
+    fillParagraphs(bodyEl, currentView === 'original' ? entry.original : entry.translated, opts);
   }
   renderChapList();
 }
+
+let splitResizeTimer;
+window.addEventListener('resize', ()=>{
+  clearTimeout(splitResizeTimer);
+  splitResizeTimer = setTimeout(()=>{
+    if(currentView === 'split'){
+      const c = currentChapter();
+      if(c) renderPage(c);
+    }
+  }, 200);
+});
+
 
 function currentChapter(){ return chapters.find(c=>c.url===currentUrl); }
 
@@ -1369,6 +1582,7 @@ async function gotoPage(delta){
   if(nextPage < 1){ toast('첫 화입니다.'); return; }
   const nextUrl = buildUrlForPage(profile, ids.id, nextPage);
   setUrlInputs(nextUrl);
+  setMobileTab('reader');
   await loadOrCached(nextUrl);
 }
 
@@ -1394,28 +1608,48 @@ function setUrlInputs(url){
   if(m) m.value = url;
 }
 
+async function runPool(items, limit, worker){
+  let idx = 0, active = 0;
+  return new Promise((resolve)=>{
+    function next(){
+      if(idx>=items.length && active===0){ resolve(); return; }
+      while(active<limit && idx<items.length){
+        const i = idx++;
+        active++;
+        worker(items[i], i).catch(e=>console.warn('batch item failed', e)).finally(()=>{ active--; next(); });
+      }
+    }
+    next();
+  });
+}
+
 async function batchContinue(){
   const n = Math.max(1, parseInt(document.getElementById('batchCount').value,10)||1);
+  const concurrency = Math.max(1, parseInt(document.getElementById('batchConcurrency').value,10)||1);
   const profile = getProfile(currentProfileId);
   if(!profile || !currentUrl){ toast('먼저 한 화를 불러오세요.'); return; }
-  let url = currentUrl;
+  const ids0 = extractIdAndPage(profile, currentUrl);
+  if(!ids0){ toast('현재 URL에서 페이지 번호를 읽지 못했습니다.'); return; }
+  const urls = [];
   for(let i=0;i<n;i++){
-    const ids = extractIdAndPage(profile, url);
-    if(!ids) break;
+    const page = parseInt(ids0.page,10) + i*profile.step;
+    urls.push(buildUrlForPage(profile, ids0.id, page));
+  }
+  let doneCount = 0;
+  setStatus(`이어받기 준비 중… (동시 ${concurrency}개)`, 'busy');
+  await runPool(urls, concurrency, async (url)=>{
     const already = chapters.find(c=>c.url===url);
     if(already){
-      toast(`(${i+1}/${n}) 이미 번역됨, 건너뜀: ${already.title}`, 1200);
-    } else {
-      setStatus(`이어받기 (${i+1}/${n})…`, 'busy');
-      const entry = await loadAndTranslate(url, {silent:true});
-      if(!entry) break;
-      toast(`(${i+1}/${n}) 완료: ${entry.title}`, 1500);
-      await sleep(400);
+      doneCount++;
+      toast(`(${doneCount}/${n}) 이미 번역됨, 건너뜀: ${already.title}`, 1200);
+      return;
     }
-    const nextPage = parseInt(ids.page,10) + profile.step;
-    url = buildUrlForPage(profile, ids.id, nextPage);
-  }
-  setUrlInputs(url);
+    const entry = await loadAndTranslate(url, {silent:true});
+    doneCount++;
+    if(entry) toast(`(${doneCount}/${n}) 완료: ${entry.title}`, 1500);
+    await sleep(200);
+  });
+  setUrlInputs(urls[urls.length-1] || currentUrl);
   toast('이어받기 종료. 보관함에서 확인하세요.');
 }
 
@@ -1435,8 +1669,8 @@ async function doLoad(url){
   if(profile){ currentProfileId = profile.id; renderProfileSelect(); renderProfileSummary(); }
   updateBookKey(url);
   restoreChapters();
-  await loadOrCached(url);
   setMobileTab('reader');
+  await loadOrCached(url);
 }
 
 document.getElementById('loadBtn').onclick = ()=> doLoad(document.getElementById('urlInput').value.trim());
@@ -1457,6 +1691,28 @@ document.getElementById('exportBtn').onclick = exportAllTxt;
 document.getElementById('clearBtn').onclick = ()=>{
   if(confirm('현재 작품의 회차 목록을 비울까요? (작품 자체는 보관함에 남습니다)')){ chapters=[]; renderChapList(); persistChapters(); renderBookList(); }
 };
+document.getElementById('glossaryAddBtn').onclick = addGlossaryRow;
+document.getElementById('glossaryList').addEventListener('click', (e)=>{
+  const del = e.target.closest('.g-del');
+  if(!del) return;
+  const b = currentBook();
+  if(!b) return;
+  const i = Number(del.getAttribute('data-i'));
+  b.glossary.splice(i,1);
+  saveBooks();
+  renderGlossary();
+});
+document.getElementById('glossaryList').addEventListener('input', (e)=>{
+  const row = e.target.closest('.glossary-row');
+  if(!row) return;
+  const b = currentBook();
+  if(!b) return;
+  const i = Number(row.getAttribute('data-i'));
+  if(!b.glossary[i]) return;
+  if(e.target.classList.contains('g-from')) b.glossary[i].from = e.target.value;
+  if(e.target.classList.contains('g-to')) b.glossary[i].to = e.target.value;
+  saveBooks();
+});
 document.getElementById('chapList').addEventListener('click', (e)=>{
   const openBtn = e.target.closest('[data-open]');
   const rmBtn = e.target.closest('[data-remove]');
@@ -1556,6 +1812,29 @@ document.getElementById('testKeysBtn').onclick = async ()=>{
     out.textContent = lines.join('\n');
   }
 };
+document.getElementById('diagBtn').onclick = async ()=>{
+  const out = document.getElementById('diagResult');
+  out.style.display = 'block';
+  out.textContent = '점검 중…';
+  const withTimeout = (p, ms)=>Promise.race([p, new Promise((_,rej)=>setTimeout(()=>rej(new Error('시간초과('+(ms/1000)+'초)')), ms))]);
+  const checks = [
+    ['r.jina.ai (리더 프록시)', ()=>fetch('https://r.jina.ai/https://example.com').then(r=>r.ok?'OK':'HTTP '+r.status)],
+    ['allorigins.win', ()=>fetch('https://api.allorigins.win/raw?url='+encodeURIComponent('https://example.com')).then(r=>r.ok?'OK':'HTTP '+r.status)],
+    ['corsproxy.io', ()=>fetch('https://corsproxy.io/?url='+encodeURIComponent('https://example.com')).then(r=>r.ok?'OK':'HTTP '+r.status)],
+    ['구글 번역 (직접 호출)', ()=>fetch('https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=ko&dt=t&q=hi').then(r=>r.ok?'OK':'HTTP '+r.status)],
+  ];
+  const lines = [];
+  for(const [name, fn] of checks){
+    try{
+      const r = await withTimeout(fn(), 7000);
+      lines.push(`✅ ${name}: ${r}`);
+    }catch(e){
+      lines.push(`❌ ${name}: ${e.message}`);
+    }
+    out.textContent = lines.join('\n');
+  }
+  out.textContent += '\n\n(Gemini 키 자체는 위 "키 테스트" 버튼으로 따로 확인하세요.)';
+};
 document.getElementById('clearKeysBtn').onclick = ()=>{
   if(!confirm('저장된 API 키를 이 브라우저에서 삭제할까요?')) return;
   document.getElementById('apiKeys').value = '';
@@ -1604,6 +1883,7 @@ function openSiteModal(profile){
   document.getElementById('profContentSel').value = profile ? profile.contentSel : '';
   document.getElementById('profTitleSel').value = profile ? profile.titleSel : '';
   document.getElementById('profRemoveSel').value = profile ? profile.removeSel : 'script, style, nav, header, footer, form';
+  document.getElementById('profPromptTemplate').value = profile ? (profile.promptTemplate||'') : '';
   document.getElementById('candWrap').style.display = 'none';
   document.getElementById('deleteProfBtn').style.display = profile ? 'inline-block' : 'none';
   toggleSelectorFields();
@@ -1656,10 +1936,12 @@ document.getElementById('saveProfBtn').onclick = ()=>{
   const contentSel = document.getElementById('profContentSel').value.trim();
   const titleSel = document.getElementById('profTitleSel').value.trim();
   const removeSel = document.getElementById('profRemoveSel').value.trim();
+  const promptTemplate = document.getElementById('profPromptTemplate').value.trim();
 
   let profile;
   if(siteModalUrl && pagePick){
     profile = buildProfileFromChoice(siteModalUrl, siteModalCands, idPick, pagePick, name, step, mode, contentSel, titleSel, removeSel);
+    if(profile) profile.promptTemplate = promptTemplate;
   } else if(editingProfileId){
     profile = getProfile(editingProfileId);
     profile.name = name || profile.name;
@@ -1668,6 +1950,7 @@ document.getElementById('saveProfBtn').onclick = ()=>{
     profile.contentSel = contentSel;
     profile.titleSel = titleSel;
     profile.removeSel = removeSel;
+    profile.promptTemplate = promptTemplate;
   } else {
     toast('URL을 분석하고 페이지 번호 역할을 지정해주세요.');
     return;
@@ -1704,6 +1987,14 @@ document.getElementById('deleteProfBtn').onclick = ()=>{
 /* =========================================================================
    초기화
    ========================================================================= */
+const scrollTopBtn = document.getElementById('scrollTopBtn');
+window.addEventListener('scroll', ()=>{
+  scrollTopBtn.classList.toggle('show', window.scrollY > 400);
+});
+scrollTopBtn.addEventListener('click', ()=>{
+  window.scrollTo({top:0, behavior:'smooth'});
+});
+
 (function init(){
   loadProfiles();
   loadBooks();
@@ -1717,6 +2008,7 @@ document.getElementById('deleteProfBtn').onclick = ()=>{
   renderProfileSelect();
   renderProfileSummary();
   renderBookList();
+  renderGlossary();
   if(last && last.url){
     document.getElementById('urlInput').value = last.url;
     const m = document.getElementById('urlInputMobile'); if(m) m.value = last.url;
