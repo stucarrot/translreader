@@ -260,6 +260,37 @@ a{color:var(--brass-soft);}
   #scrollTopBtn{bottom:calc(var(--bottombar-h) + 14px);width:34px;height:34px;font-size:14px;right:12px;}
 }
 
+#highlightPopup{
+  position:fixed;z-index:90;transform:translateX(-50%);
+  background:var(--seal);color:#fbeee0;border:1px solid var(--seal-dark);
+  padding:6px 12px;border-radius:14px;font-size:12px;display:none;cursor:pointer;
+  box-shadow:0 4px 14px rgba(0,0,0,.45);
+}
+#highlightPopup.show{display:block;}
+
+mark.user-highlight{
+  background:rgba(214,178,94,.38);color:inherit;border-radius:2px;padding:0 1px;
+  box-decoration-break:clone;-webkit-box-decoration-break:clone;
+}
+.page[data-theme="dark"] mark.user-highlight{background:rgba(214,178,94,.3);}
+
+.part-divider{
+  height:0;border-top:2px dotted #c9a877;opacity:.7;margin:22px 0;position:relative;
+}
+.part-divider::after{
+  content:'이어짐';position:absolute;top:-9px;left:50%;transform:translateX(-50%);
+  background:var(--pg-bg);color:#c9a877;font-size:10px;padding:0 8px;
+  font-family:'IBM Plex Mono',monospace;letter-spacing:.05em;
+}
+
+.highlight-item{border-bottom:1px solid #2c332a;padding:8px 4px;font-size:12px;}
+.hl-meta{display:flex;justify-content:space-between;align-items:center;gap:6px;margin-bottom:4px;}
+.hl-src{color:var(--brass-soft);font-size:11px;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.hl-src:hover{text-decoration:underline;}
+.hl-del{background:none;border:none;color:#6d7568;font-size:12px;flex-shrink:0;}
+.hl-del:hover{color:var(--seal);}
+.hl-text{color:#c9cdc2;line-height:1.5;border-left:2px solid rgba(214,178,94,.5);padding-left:8px;}
+
 /* ---------- mobile bottom nav ---------- */
 .bottombar{
   display:none;
@@ -398,6 +429,16 @@ a{color:var(--brass-soft);}
       <div id="glossaryList"></div>
       <button class="btn small-btn" id="glossaryAddBtn" style="width:100%;margin-top:6px;">+ 용어 추가</button>
       <div class="hint">인물명 등 고유명사의 원어→번역 표기를 등록해두면, 이 작품을 번역할 때마다 프롬프트에 자동으로 포함되어 표기가 일관되게 유지됩니다.</div>
+    </div>
+
+    <div class="side-section">
+      <h3>하이라이트 (현재 작품)</h3>
+      <div id="highlightList"></div>
+      <div class="row" style="margin-top:8px;">
+        <button class="btn small-btn" id="hlExportBtn">전체 txt 다운로드</button>
+        <button class="btn small-btn" id="hlCopyBtn">클립보드 복사</button>
+      </div>
+      <div class="hint">읽기 화면에서 문장을 드래그해 선택하면 뜨는 🖍 버튼으로 하이라이트할 수 있습니다. 항목을 누르면 그 회차로 이동합니다.</div>
     </div>
 
     <div class="side-section">
@@ -565,6 +606,7 @@ a{color:var(--brass-soft);}
 
 <div class="toast" id="toast" style="display:none;"></div>
 <button id="scrollTopBtn" title="맨 위로">↑</button>
+<button id="highlightPopup">🖍 하이라이트</button>
 
 <script>
 /* =========================================================================
@@ -1260,15 +1302,17 @@ function registerBookIfNew(profile, idValue, firstChapterTitle){
   const key = profile.id + '::' + (idValue||'x');
   let b = books.find(x=>x.key===key);
   if(!b){
-    b = { key, profileId: profile.id, idValue: idValue||'', title: guessBookTitle(firstChapterTitle, profile, idValue), updatedAt: Date.now(), glossary: [] };
+    b = { key, profileId: profile.id, idValue: idValue||'', title: guessBookTitle(firstChapterTitle, profile, idValue), updatedAt: Date.now(), glossary: [], highlights: [] };
     books.push(b);
   } else {
     b.updatedAt = Date.now();
     if(!b.glossary) b.glossary = [];
+    if(!b.highlights) b.highlights = [];
   }
   saveBooks();
   renderBookList();
   renderGlossary();
+  renderHighlights();
   return b;
 }
 
@@ -1321,6 +1365,7 @@ function openBook(key){
   }
   renderBookList();
   renderGlossary();
+  renderHighlights();
   setMobileTab('chapters');
 }
 
@@ -1355,6 +1400,102 @@ function renderGlossary(){
       <button class="g-del" title="삭제" data-i="${i}">✕</button>
     </div>
   `).join('');
+}
+
+/* ---- 하이라이트 (작품별) ---- */
+function getHighlightsFor(entry, view){
+  const b = currentBook();
+  if(!b || !b.highlights || !entry) return [];
+  return b.highlights.filter(h=>h.url===entry.url && h.view===view).map(h=>h.text);
+}
+
+function addHighlight(text, view){
+  if(!text || !text.trim()) return;
+  const b = currentBook();
+  if(!b || !currentUrl){ toast('작품 정보를 찾지 못해 하이라이트를 저장하지 못했습니다.'); return; }
+  b.highlights = b.highlights || [];
+  if(b.highlights.some(h=>h.url===currentUrl && h.view===view && h.text===text)){
+    toast('이미 하이라이트된 부분입니다.', 1800);
+    return;
+  }
+  const chap = currentChapter();
+  b.highlights.push({
+    id: 'hl_'+Date.now()+'_'+Math.random().toString(36).slice(2,7),
+    url: currentUrl,
+    chapterTitle: (chap && chap.title) || '',
+    page: (chap && chap.page) || '',
+    view,
+    text,
+    createdAt: Date.now()
+  });
+  saveBooks();
+  toast('하이라이트에 저장했습니다.', 1800);
+  renderHighlights();
+  if(chap) renderPage(chap);
+}
+
+function removeHighlight(id){
+  const b = currentBook();
+  if(!b) return;
+  b.highlights = (b.highlights||[]).filter(h=>h.id!==id);
+  saveBooks();
+  renderHighlights();
+  const chap = currentChapter();
+  if(chap) renderPage(chap);
+}
+
+function sortedHighlights(b){
+  return [...(b.highlights||[])].sort((a,c)=>{
+    const pa = parseFloat(a.page), pc = parseFloat(c.page);
+    if(!isNaN(pa) && !isNaN(pc) && pa!==pc) return pa-pc;
+    return a.createdAt - c.createdAt;
+  });
+}
+
+function renderHighlights(){
+  const wrap = document.getElementById('highlightList');
+  if(!wrap) return;
+  const b = currentBook();
+  if(!b || !b.highlights || !b.highlights.length){
+    wrap.innerHTML = '<div class="hint">아직 하이라이트한 부분이 없습니다. 읽기 화면에서 문장을 드래그해 선택하면 🖍 버튼이 뜹니다.</div>';
+    return;
+  }
+  wrap.innerHTML = sortedHighlights(b).map(h=>`
+    <div class="highlight-item" data-id="${h.id}">
+      <div class="hl-meta">
+        <span class="hl-src" data-open-hl="${encodeURIComponent(h.url)}">${h.page?('#'+h.page+' '):''}${escapeHtml(h.chapterTitle||'')} · ${h.view==='original'?'원문':'번역'}</span>
+        <button class="hl-del" data-del-hl="${h.id}" title="삭제">✕</button>
+      </div>
+      <div class="hl-text">${escapeHtml(h.text)}</div>
+    </div>
+  `).join('');
+}
+
+function exportHighlightsTxt(){
+  const b = currentBook();
+  if(!b || !b.highlights || !b.highlights.length){ toast('내보낼 하이라이트가 없습니다.'); return; }
+  const text = sortedHighlights(b).map(h=>
+    `[${h.page?('#'+h.page+' '):''}${h.chapterTitle||''} · ${h.view==='original'?'원문':'번역'}]\n${h.text}\n`
+  ).join('\n');
+  const blob = new Blob([text], {type:'text/plain;charset=utf-8'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = (b.title||'highlights') + '_하이라이트.txt';
+  document.body.appendChild(a); a.click(); a.remove();
+}
+
+async function copyHighlightsClipboard(){
+  const b = currentBook();
+  if(!b || !b.highlights || !b.highlights.length){ toast('복사할 하이라이트가 없습니다.'); return; }
+  const text = sortedHighlights(b).map(h=>
+    `[${h.page?('#'+h.page+' '):''}${h.chapterTitle||''}]\n${h.text}`
+  ).join('\n\n');
+  try{
+    await navigator.clipboard.writeText(text);
+    toast('하이라이트를 클립보드에 복사했습니다.', 2000);
+  }catch(e){
+    toast('클립보드 복사 실패: '+e.message, 4000);
+  }
 }
 
 function addGlossaryRow(){
@@ -1536,13 +1677,42 @@ function splitParas(text){
   return (text||'').split(/\n{2,}/).map(s=>s.trim()).filter(Boolean);
 }
 
+/* 저장된 하이라이트 문자열을 기준으로, 문단 텍스트를 하이라이트/비하이라이트 조각으로 나눈다.
+   재렌더링될 때마다(파라그래프를 매번 새로 만들기 때문에) 텍스트 매칭으로 다시 입혀야 한다. */
+function tokenizeWithHighlights(text, highlights){
+  if(!highlights || !highlights.length) return [{text, hl:false}];
+  const sorted = [...highlights].filter(Boolean).sort((a,b)=>b.length-a.length);
+  let tokens = [{text, hl:false}];
+  for(const h of sorted){
+    const next = [];
+    for(const tok of tokens){
+      if(tok.hl){ next.push(tok); continue; }
+      let rest = tok.text, idx;
+      while((idx = rest.indexOf(h)) !== -1){
+        if(idx>0) next.push({text:rest.slice(0,idx), hl:false});
+        next.push({text:h, hl:true});
+        rest = rest.slice(idx+h.length);
+      }
+      if(rest) next.push({text:rest, hl:false});
+    }
+    tokens = next;
+  }
+  return tokens;
+}
+
 function buildParaEl(paraText, idx, opts){
   const el = document.createElement('p');
   el.className = 'reader-para';
-  const lines = paraText.split('\n');
-  lines.forEach((line,i)=>{
-    if(i>0) el.appendChild(document.createElement('br'));
-    el.appendChild(document.createTextNode(line));
+  const tokens = tokenizeWithHighlights(paraText, opts && opts.highlights);
+  tokens.forEach(tok=>{
+    const target = tok.hl ? document.createElement('mark') : el;
+    if(tok.hl) target.className = 'user-highlight';
+    const lines = tok.text.split('\n');
+    lines.forEach((line,i)=>{
+      if(i>0) target.appendChild(document.createElement('br'));
+      target.appendChild(document.createTextNode(line));
+    });
+    if(tok.hl) el.appendChild(target);
   });
   if(opts && opts.retranslateUrl){
     el.appendChild(document.createTextNode(' '));
@@ -1557,37 +1727,70 @@ function buildParaEl(paraText, idx, opts){
   return el;
 }
 
+function buildPartDivider(){
+  const div = document.createElement('div');
+  div.className = 'part-divider';
+  div.title = '여기서 다음 부분으로 이어집니다';
+  return div;
+}
+
 function fillParagraphs(container, text, opts){
   container.innerHTML = '';
   const paras = splitParas(text);
-  if(!paras.length){ return; }
-  paras.forEach((p,idx)=> container.appendChild(buildParaEl(p, idx, opts)));
+  const dividers = (opts && opts.dividerIndices) || [];
+  if(!paras.length){
+    if(dividers.includes(0)) container.appendChild(buildPartDivider());
+    return;
+  }
+  paras.forEach((p,idx)=>{
+    if(dividers.includes(idx)) container.appendChild(buildPartDivider());
+    container.appendChild(buildParaEl(p, idx, opts));
+  });
+  if(dividers.includes(paras.length)) container.appendChild(buildPartDivider());
 }
 
 /* 모바일 나란히 보기: 원문 문단 바로 아래 번역 문단을 짝지어 보여준다 */
-function fillInterleaved(container, original, translated, retranslateUrl){
+function fillInterleaved(container, original, translated, retranslateUrl, dividerIndices, origHighlights, transHighlights){
   container.innerHTML = '';
   const origParas = splitParas(original);
   const transParas = splitParas(translated);
   const max = Math.max(origParas.length, transParas.length);
+  const dividers = dividerIndices || [];
   for(let i=0;i<max;i++){
+    if(dividers.includes(i)) container.appendChild(buildPartDivider());
     const pair = document.createElement('div');
     pair.className = 'split-pair';
     if(origParas[i]!==undefined){
-      const o = buildParaEl(origParas[i], i, null);
+      const o = buildParaEl(origParas[i], i, {highlights: origHighlights});
       o.classList.add('split-orig-para');
       pair.appendChild(o);
     }
     if(transParas[i]!==undefined){
-      const t = buildParaEl(transParas[i], i, {retranslateUrl});
+      const t = buildParaEl(transParas[i], i, {retranslateUrl, highlights: transHighlights});
       t.classList.add('split-trans-para');
       pair.appendChild(t);
     }
     container.appendChild(pair);
   }
+  if(dividers.includes(max)) container.appendChild(buildPartDivider());
 }
 function isMobileMode(){
   return window.matchMedia && window.matchMedia('(max-width:880px)').matches;
+}
+
+/* 부분(part) 경계가 몇 번째 문단 앞에 오는지 계산한다 (긴 페이지 자동 분할용). */
+function getDividerIndices(entry, forTranslated){
+  if(!entry.parts || entry.parts.length <= 1) return [];
+  const segments = forTranslated
+    ? (entry.translatedParts||[]).slice(0, entry.partsDone)
+    : entry.parts.slice(0, entry.partsStarted || 1);
+  const indices = [];
+  let cum = 0;
+  for(let i=0;i<segments.length;i++){
+    cum += splitParas(segments[i]||'').length;
+    if(i < segments.length-1 || segments.length < entry.parts.length) indices.push(cum);
+  }
+  return indices;
 }
 
 async function retranslateParagraph(url, idx, btn){
@@ -1631,6 +1834,8 @@ function renderPage(entry){
   const pageEl = document.getElementById('pageEl');
   bodyEl.classList.remove('mono-empty');
   const origText = revealedOriginal(entry);
+  const origHl = getHighlightsFor(entry, 'original');
+  const transHl = getHighlightsFor(entry, 'translated');
   if(currentView === 'split'){
     pageEl.querySelector('.page-body') && (pageEl.querySelector('.page-body').style.display='none');
     let splitDiv = pageEl.querySelector('.split');
@@ -1642,22 +1847,27 @@ function renderPage(entry){
     splitDiv.style.display = 'block';
     if(isMobileMode()){
       splitDiv.innerHTML = `<div class="split-interleaved" id="splitInterleaved"></div>`;
-      fillInterleaved(splitDiv.querySelector('#splitInterleaved'), origText, entry.translated, entry.url);
+      fillInterleaved(splitDiv.querySelector('#splitInterleaved'), origText, entry.translated, entry.url, getDividerIndices(entry, true), origHl, transHl);
     } else {
       splitDiv.style.display = 'grid';
       splitDiv.innerHTML = `
         <div class="col"><h4>원문</h4><div class="col-body" id="colOriginal"></div></div>
         <div class="col"><h4>번역</h4><div class="col-body" id="colTranslated"></div></div>
       `;
-      fillParagraphs(splitDiv.querySelector('#colOriginal'), origText);
-      fillParagraphs(splitDiv.querySelector('#colTranslated'), entry.translated, {retranslateUrl: entry.url});
+      fillParagraphs(splitDiv.querySelector('#colOriginal'), origText, {highlights: origHl, dividerIndices: getDividerIndices(entry, false)});
+      fillParagraphs(splitDiv.querySelector('#colTranslated'), entry.translated, {retranslateUrl: entry.url, highlights: transHl, dividerIndices: getDividerIndices(entry, true)});
     }
   } else {
     const splitDiv = pageEl.querySelector('.split');
     if(splitDiv) splitDiv.style.display = 'none';
     bodyEl.style.display = 'block';
-    const opts = currentView === 'original' ? undefined : {retranslateUrl: entry.url};
-    fillParagraphs(bodyEl, currentView === 'original' ? origText : entry.translated, opts);
+    const isOrig = currentView === 'original';
+    const opts = {
+      retranslateUrl: isOrig ? undefined : entry.url,
+      highlights: isOrig ? origHl : transHl,
+      dividerIndices: getDividerIndices(entry, !isOrig)
+    };
+    fillParagraphs(bodyEl, isOrig ? origText : entry.translated, opts);
   }
   renderChapList();
   updatePartsUI();
@@ -1874,6 +2084,59 @@ document.getElementById('glossaryList').addEventListener('input', (e)=>{
   if(e.target.classList.contains('g-to')) b.glossary[i].to = e.target.value;
   saveBooks();
 });
+
+document.getElementById('hlExportBtn').onclick = exportHighlightsTxt;
+document.getElementById('hlCopyBtn').onclick = copyHighlightsClipboard;
+document.getElementById('highlightList').addEventListener('click', (e)=>{
+  const del = e.target.closest('[data-del-hl]');
+  const open = e.target.closest('[data-open-hl]');
+  if(del){ removeHighlight(del.getAttribute('data-del-hl')); return; }
+  if(open){
+    const url = decodeURIComponent(open.getAttribute('data-open-hl'));
+    document.getElementById('urlInput').value = url;
+    const m = document.getElementById('urlInputMobile'); if(m) m.value = url;
+    doLoad(url);
+  }
+});
+
+/* ---- 텍스트 선택 → 하이라이트 팝업 ---- */
+function detectHighlightView(node){
+  let el = node && node.nodeType===3 ? node.parentElement : node;
+  while(el && el !== document.body){
+    if(el.id==='colOriginal' || el.classList.contains('split-orig-para')) return 'original';
+    if(el.id==='colTranslated' || el.classList.contains('split-trans-para')) return 'translated';
+    el = el.parentElement;
+  }
+  return currentView === 'original' ? 'original' : 'translated';
+}
+
+const highlightPopup = document.getElementById('highlightPopup');
+let pendingHighlight = null;
+document.addEventListener('selectionchange', ()=>{
+  const sel = window.getSelection();
+  const pageEl = document.getElementById('pageEl');
+  if(!sel || sel.isCollapsed || !sel.rangeCount || !pageEl.contains(sel.anchorNode)){
+    highlightPopup.classList.remove('show');
+    pendingHighlight = null;
+    return;
+  }
+  const text = sel.toString().trim();
+  if(!text){ highlightPopup.classList.remove('show'); pendingHighlight = null; return; }
+  const rect = sel.getRangeAt(0).getBoundingClientRect();
+  if(rect.width===0 && rect.height===0){ highlightPopup.classList.remove('show'); return; }
+  highlightPopup.style.left = (rect.left + rect.width/2) + 'px';
+  highlightPopup.style.top = Math.max(8, rect.top - 40) + 'px';
+  highlightPopup.classList.add('show');
+  pendingHighlight = {text, view: detectHighlightView(sel.anchorNode)};
+});
+highlightPopup.addEventListener('mousedown', (e)=>{ e.preventDefault(); });
+highlightPopup.addEventListener('click', ()=>{
+  if(pendingHighlight) addHighlight(pendingHighlight.text, pendingHighlight.view);
+  highlightPopup.classList.remove('show');
+  window.getSelection().removeAllRanges();
+  pendingHighlight = null;
+});
+
 document.getElementById('chapList').addEventListener('click', (e)=>{
   const openBtn = e.target.closest('[data-open]');
   const rmBtn = e.target.closest('[data-remove]');
