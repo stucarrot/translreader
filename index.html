@@ -81,6 +81,12 @@ a{color:var(--brass-soft);}
   border-radius:var(--radius);padding:7px 8px;font-size:12.5px;max-width:150px;flex-shrink:0;
 }
 
+.topbar-status{
+  display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--text-dim);
+  flex-shrink:0;max-width:150px;overflow:hidden;white-space:nowrap;
+}
+.topbar-status span:last-child{overflow:hidden;text-overflow:ellipsis;}
+
 /* ---------- layout ---------- */
 .layout{display:flex;align-items:flex-start;}
 .main{flex:1;display:flex;flex-direction:column;min-width:0;padding:22px 22px 40px;}
@@ -256,8 +262,17 @@ a{color:var(--brass-soft);}
 }
 #scrollTopBtn:hover{opacity:1;}
 #scrollTopBtn.show{display:flex;}
+#scrollBottomBtn{
+  position:fixed;right:16px;bottom:74px;width:38px;height:38px;border-radius:50%;
+  background:#3a4139;color:var(--paper);border:1px solid #4a5342;
+  display:none;align-items:center;justify-content:center;font-size:16px;
+  box-shadow:0 4px 14px rgba(0,0,0,.4);z-index:55;cursor:pointer;opacity:.85;
+}
+#scrollBottomBtn:hover{opacity:1;}
 @media (max-width:880px){
   #scrollTopBtn{bottom:calc(var(--bottombar-h) + 14px);width:34px;height:34px;font-size:14px;right:12px;}
+  #scrollBottomBtn.show{display:flex;}
+  #scrollBottomBtn{bottom:calc(var(--bottombar-h) + 60px);width:34px;height:34px;font-size:14px;right:12px;}
 }
 
 #highlightPopup{
@@ -328,6 +343,10 @@ mark.user-highlight{
       <input id="urlInput" type="text" placeholder="소설 페이지 URL을 붙여넣으세요">
       <button class="btn btn-primary" id="loadBtn">불러오기</button>
     </div>
+  </div>
+  <div class="topbar-status" id="topbarStatus" title="번역 상태">
+    <span class="dot" id="topbarStatusDot"></span>
+    <span id="topbarStatusText">대기 중</span>
   </div>
   <button class="btn btn-icon" id="siteBtn" title="사이트 유형 등록/편집">🧩</button>
   <button class="btn btn-icon" id="settingsBtn" title="번역 설정">⚙️</button>
@@ -606,6 +625,7 @@ mark.user-highlight{
 
 <div class="toast" id="toast" style="display:none;"></div>
 <button id="scrollTopBtn" title="맨 위로">↑</button>
+<button id="scrollBottomBtn" title="맨 아래로">↓</button>
 <button id="highlightPopup">🖍 하이라이트</button>
 
 <script>
@@ -747,6 +767,10 @@ function setStatus(text, kind){
   document.getElementById('statusText').textContent = text;
   const dot = document.getElementById('statusDot');
   dot.className = 'dot' + (kind ? ' '+kind : '');
+  const topText = document.getElementById('topbarStatusText');
+  const topDot = document.getElementById('topbarStatusDot');
+  if(topText){ topText.textContent = text; topText.parentElement.title = text; }
+  if(topDot) topDot.className = 'dot' + (kind ? ' '+kind : '');
 }
 function setBusy(v){ busy = v; }
 
@@ -1871,6 +1895,7 @@ function renderPage(entry){
   }
   renderChapList();
   updatePartsUI();
+  updateScrollButtons();
 }
 
 let splitResizeTimer;
@@ -1952,7 +1977,7 @@ async function gotoPage(delta){
   if(nextPage < 1){ toast('첫 화입니다.'); return; }
   const nextUrl = buildUrlForPage(profile, ids.id, formatPage(profile, nextPage));
   setUrlInputs(nextUrl);
-  setMobileTab('reader');
+  setMobileTab('reader', {resetScroll:true});
   await loadOrCached(nextUrl);
 }
 
@@ -2039,7 +2064,7 @@ async function doLoad(url){
   if(profile){ currentProfileId = profile.id; renderProfileSelect(); renderProfileSummary(); }
   updateBookKey(url);
   restoreChapters();
-  setMobileTab('reader');
+  setMobileTab('reader', {resetScroll:true});
   await loadOrCached(url);
 }
 
@@ -2125,7 +2150,7 @@ document.addEventListener('selectionchange', ()=>{
   const rect = sel.getRangeAt(0).getBoundingClientRect();
   if(rect.width===0 && rect.height===0){ highlightPopup.classList.remove('show'); return; }
   highlightPopup.style.left = (rect.left + rect.width/2) + 'px';
-  highlightPopup.style.top = Math.max(8, rect.top - 40) + 'px';
+  highlightPopup.style.top = Math.min(window.innerHeight - 40, rect.bottom + 10) + 'px';
   highlightPopup.classList.add('show');
   pendingHighlight = {text, view: detectHighlightView(sel.anchorNode)};
 });
@@ -2148,7 +2173,7 @@ document.getElementById('chapList').addEventListener('click', (e)=>{
       setUrlInputs(url);
       renderPage(entry);
       saveLast();
-      setMobileTab('reader');
+      setMobileTab('reader', {resetScroll:true});
     }
     return;
   }
@@ -2276,7 +2301,13 @@ document.getElementById('resetPromptBtn').onclick = (e)=>{
 /* =========================================================================
    모바일 하단 탭
    ========================================================================= */
-function setMobileTab(tab){
+let savedReaderScroll = 0;
+function setMobileTab(tab, opts){
+  opts = opts || {};
+  const prevTab = document.body.getAttribute('data-mtab');
+  if(prevTab === 'reader' && tab !== 'reader'){
+    savedReaderScroll = window.scrollY;
+  }
   document.body.setAttribute('data-mtab', tab);
   document.querySelectorAll('.bottombar button[data-mtab]').forEach(b=>{
     b.classList.toggle('active', b.getAttribute('data-mtab')===tab);
@@ -2284,6 +2315,17 @@ function setMobileTab(tab){
   document.getElementById('mainPanel').classList.toggle('mtab-active', tab==='reader');
   document.getElementById('sidePanel').classList.toggle('mtab-active', tab==='chapters');
   document.getElementById('sitePanel').classList.toggle('mtab-active', tab==='site');
+  if(tab === 'reader'){
+    const target = opts.resetScroll ? 0 : savedReaderScroll;
+    if(opts.resetScroll) savedReaderScroll = 0;
+    // 레이아웃이 자리 잡을 시간을 준 뒤 스크롤 위치를 되돌린다(또는 새 화라면 맨 위로).
+    requestAnimationFrame(()=>requestAnimationFrame(()=>{
+      window.scrollTo(0, target);
+      updateScrollButtons();
+    }));
+  } else {
+    window.scrollTo(0,0);
+  }
 }
 document.querySelectorAll('.bottombar button[data-mtab]').forEach(b=>{
   b.addEventListener('click', ()=>setMobileTab(b.getAttribute('data-mtab')));
@@ -2412,11 +2454,20 @@ document.getElementById('deleteProfBtn').onclick = ()=>{
    초기화
    ========================================================================= */
 const scrollTopBtn = document.getElementById('scrollTopBtn');
-window.addEventListener('scroll', ()=>{
+const scrollBottomBtn = document.getElementById('scrollBottomBtn');
+function updateScrollButtons(){
+  const doc = document.documentElement;
+  const maxScroll = doc.scrollHeight - window.innerHeight;
   scrollTopBtn.classList.toggle('show', window.scrollY > 400);
-});
+  scrollBottomBtn.classList.toggle('show', maxScroll > 300 && (maxScroll - window.scrollY) > 200);
+}
+window.addEventListener('scroll', updateScrollButtons);
+window.addEventListener('resize', updateScrollButtons);
 scrollTopBtn.addEventListener('click', ()=>{
   window.scrollTo({top:0, behavior:'smooth'});
+});
+scrollBottomBtn.addEventListener('click', ()=>{
+  window.scrollTo({top: document.documentElement.scrollHeight, behavior:'smooth'});
 });
 
 (function init(){
@@ -2443,7 +2494,7 @@ scrollTopBtn.addEventListener('click', ()=>{
     const existing = chapters.find(c=>c.url===last.url);
     if(existing) renderPage(existing);
   }
-  setMobileTab('reader');
+  setMobileTab('reader', {resetScroll:true});
 })();
 </script>
 </body>
