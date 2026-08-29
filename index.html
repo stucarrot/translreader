@@ -708,6 +708,23 @@ function defaultProfiles(){
       titleSel: '',
       removeSel: 'script, style, nav, header, footer, form',
       promptTemplate: ''
+    },
+    {
+      id: 'libcat_ru',
+      name: 'Libcat.ru',
+      hostname: 'libcat.ru',
+      // 한 경로 조각 안에 "작품ID-페이지-제목슬러그.html"이 함께 들어있는 구조라
+      // segRegex(캡처그룹 2개)로 ID와 페이지를 동시에 뽑아낸다.
+      idLoc: {type:'path', index:2, segRegex:'^(\\d+)-(\\d+)-arkadij-strugackij-polden-xxii-vek\\.html$', group:1},
+      pageLoc: {type:'path', index:2, segRegex:'^(\\d+)-(\\d+)-arkadij-strugackij-polden-xxii-vek\\.html$', group:2},
+      pagePad: 0,
+      urlTemplate: 'https://libcat.ru/knigi/fantastika-i-fjentezi/{id}-{page}-arkadij-strugackij-polden-xxii-vek.html',
+      step: 1,
+      mode: 'reader',
+      contentSel: '',
+      titleSel: '',
+      removeSel: 'script, style, nav, header, footer, form',
+      promptTemplate: ''
     }
   ];
 }
@@ -909,13 +926,24 @@ function analyzeUrl(urlStr){
   const cands = [];
   const segs = u.pathname.split('/').filter(Boolean);
   segs.forEach((seg,i)=>{
-    const m = seg.match(/^(\D*?)(\d+)(\D*)$/);
-    if(m){
-      // "01.html" 처럼 접두/접미가 붙은 숫자도 페이지 후보로 인식 (숫자 부분만 증감)
-      cands.push({type:'path', index:i, prefix:m[1], digits:m[2], suffix:m[3], value:m[2], label:`경로[${i+1}] = ${seg}`, canPage:true});
-    } else {
+    const re = /\d+/g;
+    let m, found = false;
+    while((m = re.exec(seg)) !== null){
+      found = true;
+      // "01.html" 처럼 접두/접미가 붙은 숫자, 그리고 "28068-2-title.html"처럼 한 조각 안에
+      // 숫자가 여러 개(작품ID+페이지) 섞여 있는 경우도 각각 별도 후보로 인식한다.
+      cands.push({
+        type:'path', index:i,
+        matchIndex:m.index, matchLength:m[0].length,
+        prefix: seg.slice(0,m.index), suffix: seg.slice(m.index+m[0].length),
+        digits:m[0], value:m[0],
+        label: `경로[${i+1}] "${m[0]}" — ${seg}`,
+        canPage:true
+      });
+    }
+    if(!found){
       // 숫자가 없는 조각(작품 슬러그 등)은 작품ID 후보로만 사용 가능
-      cands.push({type:'path', index:i, prefix:'', digits:null, suffix:'', value:seg, label:`경로[${i+1}] = ${seg}`, canPage:false});
+      cands.push({type:'path', index:i, matchIndex:0, matchLength:seg.length, prefix:'', suffix:'', digits:null, value:seg, label:`경로[${i+1}] = ${seg}`, canPage:false});
     }
   });
   for(const [k,v] of u.searchParams.entries()){
@@ -928,22 +956,63 @@ function analyzeUrl(urlStr){
   return {url:u, cands};
 }
 
+function escapeRegexLiteral(s){ return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
+
+/* 같은 경로 조각 안에 작품ID와 페이지 숫자가 함께 들어있는 경우(예: "28068-2-title.html")를 위해,
+   그 조각 전용 정규식(캡처그룹 2개)과 치환용 템플릿을 함께 만든다. */
+function buildSharedSegRegex(seg, idPick, pagePick){
+  const points = [
+    {start:idPick.matchIndex, end:idPick.matchIndex+idPick.matchLength, kind:'id'},
+    {start:pagePick.matchIndex, end:pagePick.matchIndex+pagePick.matchLength, kind:'page'}
+  ].sort((a,b)=>a.start-b.start);
+  let regexStr = '^', tplStr = '', cursor = 0, groupIdx = 0;
+  const groups = {};
+  for(const p of points){
+    const literal = seg.slice(cursor, p.start);
+    regexStr += escapeRegexLiteral(literal);
+    tplStr += literal;
+    groupIdx++;
+    regexStr += '(\\d+)';
+    groups[p.kind] = groupIdx;
+    tplStr += (p.kind==='id' ? '{id}' : '{page}');
+    cursor = p.end;
+  }
+  const tail = seg.slice(cursor);
+  regexStr += escapeRegexLiteral(tail) + '$';
+  tplStr += tail;
+  return {regex: regexStr, groups, template: tplStr};
+}
+
 function buildProfileFromChoice(u, cands, idPick, pagePick, name, step, mode, contentSel, titleSel, removeSel){
   if(!pagePick || pagePick.canPage===false) return null;
-  const idLoc = idPick
-    ? (idPick.type==='query' ? {type:'query', key:idPick.key} : {type:'path', index:idPick.index, prefix:idPick.prefix||'', suffix:idPick.suffix||''})
-    : null;
-  const pageLoc = pagePick.type==='query'
-    ? {type:'query', key:pagePick.key}
-    : {type:'path', index:pagePick.index, prefix:pagePick.prefix||'', suffix:pagePick.suffix||''};
-  const pagePad = (pagePick.digits && pagePick.digits.length>1 && pagePick.digits[0]==='0') ? pagePick.digits.length : 0;
+  const samePathSeg = idPick && idPick.type==='path' && pagePick.type==='path'
+    && idPick.index===pagePick.index && idPick.matchIndex!==undefined && pagePick.matchIndex!==undefined
+    && idPick.matchIndex !== pagePick.matchIndex;
 
   const segs = u.pathname.split('/').filter(Boolean);
-  const tplSegs = segs.map((seg,i)=>{
-    if(idLoc && idLoc.type==='path' && idLoc.index===i) return (idLoc.prefix||'') + '{id}' + (idLoc.suffix||'');
-    if(pageLoc.type==='path' && pageLoc.index===i) return (pageLoc.prefix||'') + '{page}' + (pageLoc.suffix||'');
-    return seg;
-  });
+  let idLoc, pageLoc, tplSegs;
+
+  if(samePathSeg){
+    const seg = segs[pagePick.index];
+    const built = buildSharedSegRegex(seg, idPick, pagePick);
+    idLoc = {type:'path', index:idPick.index, segRegex: built.regex, group: built.groups.id};
+    pageLoc = {type:'path', index:pagePick.index, segRegex: built.regex, group: built.groups.page};
+    tplSegs = segs.map((s,i)=> i===pagePick.index ? built.template : s);
+  } else {
+    idLoc = idPick
+      ? (idPick.type==='query' ? {type:'query', key:idPick.key} : {type:'path', index:idPick.index, prefix:idPick.prefix||'', suffix:idPick.suffix||''})
+      : null;
+    pageLoc = pagePick.type==='query'
+      ? {type:'query', key:pagePick.key}
+      : {type:'path', index:pagePick.index, prefix:pagePick.prefix||'', suffix:pagePick.suffix||''};
+    tplSegs = segs.map((seg,i)=>{
+      if(idLoc && idLoc.type==='path' && idLoc.index===i) return (idLoc.prefix||'') + '{id}' + (idLoc.suffix||'');
+      if(pageLoc.type==='path' && pageLoc.index===i) return (pageLoc.prefix||'') + '{page}' + (pageLoc.suffix||'');
+      return seg;
+    });
+  }
+  const pagePad = (pagePick.digits && pagePick.digits.length>1 && pagePick.digits[0]==='0') ? pagePick.digits.length : 0;
+
   const search = new URLSearchParams(u.search);
   const qp = [];
   for(const [k,v] of search.entries()){
@@ -990,6 +1059,11 @@ function extractIdAndPage(profile, urlStr){
       const segs = u.pathname.split('/').filter(Boolean);
       const seg = segs[loc.index];
       if(seg===undefined) return null;
+      if(loc.segRegex){
+        // 한 경로 조각 안에 작품ID+페이지 숫자가 함께 있는 경우(예: "28068-2-title.html")
+        const m = seg.match(new RegExp(loc.segRegex));
+        return m ? m[loc.group] : null;
+      }
       if(loc.prefix || loc.suffix){
         if(!seg.startsWith(loc.prefix) || !seg.endsWith(loc.suffix)) return null;
         return seg.slice(loc.prefix.length, seg.length - loc.suffix.length);
