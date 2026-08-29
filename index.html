@@ -221,7 +221,8 @@ a{color:var(--brass-soft);}
 .booklist .bactions{display:flex;gap:4px;flex-shrink:0;}
 .booklist .bactions button{background:none;border:none;color:#6d7568;font-size:12px;padding:2px 4px;}
 .booklist .bactions button:hover{color:var(--paper);}
-.booklist li.active{background:#2c332a;border-radius:4px;}
+.booklist li.active{background:#2c332a;border-radius:4px;border-left:3px solid var(--brass);padding-left:5px;}
+.booklist li.active .bname{color:var(--brass-soft);}
 
 .chaplist{list-style:none;margin:0;padding:0;font-size:12px;max-height:220px;overflow-y:auto;}
 .chaplist li{padding:6px 6px;border-bottom:1px solid #2c332a;display:flex;justify-content:space-between;gap:6px;align-items:center;}
@@ -551,6 +552,11 @@ mark.user-highlight{
       </div>
       <div id="diagResult" style="display:none;font-family:'IBM Plex Mono',monospace;font-size:11px;background:#151915;border:1px solid #3a4139;border-radius:4px;padding:8px;margin-top:8px;white-space:pre-wrap;max-height:160px;overflow-y:auto;"></div>
     </div>
+    <div class="field">
+      <label>긴 페이지 자동 분할 기준 (글자 수, 공백 포함)</label>
+      <input id="longPageThreshold" type="number" min="500" step="500" value="5000">
+      <div class="hint">한 URL 안의 본문이 이 글자 수를 넘으면 문장이 끊기지 않게 나눠서 부분별로 번역합니다(기본 5000자). 너무 작게 잡으면 부분이 잘게 쪼개져 "계속 번역"을 자주 눌러야 합니다.</div>
+    </div>
     <div class="footer-row">
       <button class="btn btn-primary" data-close="settingsModal">저장하고 닫기</button>
     </div>
@@ -653,6 +659,7 @@ const memory = {
   targetLangName: '한국어',
   corsProxyTemplate: 'https://api.allorigins.win/raw?url={url}',
   promptTemplate: DEFAULT_PROMPT_TEMPLATE,
+  longPageThreshold: 5000,
 };
 
 const LS_PROFILES = 'tr_profiles_v1';
@@ -724,7 +731,16 @@ function defaultProfiles(){
       contentSel: '',
       titleSel: '',
       removeSel: 'script, style, nav, header, footer, form',
-      promptTemplate: ''
+      promptTemplate: '',
+      // 이 사이트는 매 페이지마다 읽기 툴바/추천 도서/리뷰 같은 공통 문구가 본문과 함께 딸려 나와서,
+      // 리더 모드로 뽑은 텍스트에서 알려진 패턴을 후처리로 제거한다.
+      textStripPatterns: [
+        'Тёмная тема[\\s\\S]*?Сделать',
+        'Читать дальше',
+        'Похожие книги[\\s\\S]*$',
+        'Отзывы о книге[\\s\\S]*$',
+        'Здесь есть возможность читать онлайн[\\s\\S]*?ЛибКат\\.'
+      ]
     }
   ];
 }
@@ -855,11 +871,13 @@ function readSettingsFromDom(){
     ? (document.getElementById('corsProxyCustom').value.trim() || PROXY_FALLBACKS[0])
     : proxySel;
   const promptTemplate = document.getElementById('promptTemplate').value.trim() || DEFAULT_PROMPT_TEMPLATE;
+  const longPageThreshold = Math.max(500, parseInt(document.getElementById('longPageThreshold').value,10) || 5000);
   return {
     apiKeys, geminiModel, targetLang,
     targetLangName: LANG_NAMES[targetLang] || targetLang,
     corsProxyTemplate,
-    promptTemplate
+    promptTemplate,
+    longPageThreshold
   };
 }
 function syncSettings(){
@@ -872,7 +890,8 @@ function syncSettings(){
       targetLang: s.targetLang,
       corsProxySel: document.getElementById('corsProxy').value,
       corsProxyCustom: document.getElementById('corsProxyCustom').value,
-      promptTemplate: s.promptTemplate
+      promptTemplate: s.promptTemplate,
+      longPageThreshold: s.longPageThreshold
     }));
   }catch(e){ console.warn('설정 저장 실패', e); }
   return s;
@@ -881,6 +900,7 @@ function restoreSettingsToDom(){
   let saved = null;
   try{ saved = JSON.parse(localStorage.getItem(LS_SETTINGS) || 'null'); }catch(e){}
   document.getElementById('promptTemplate').value = (saved && saved.promptTemplate) ? saved.promptTemplate : DEFAULT_PROMPT_TEMPLATE;
+  document.getElementById('longPageThreshold').value = (saved && saved.longPageThreshold) ? saved.longPageThreshold : 5000;
   if(!saved) return;
   if(saved.apiKeys && saved.apiKeys.length) document.getElementById('apiKeys').value = saved.apiKeys.join('\n');
   if(saved.geminiModel) document.getElementById('geminiModel').value = saved.geminiModel;
@@ -1124,17 +1144,34 @@ async function fetchViaSelector(profile, url){
   return { title, body };
 }
 
+function applyStripPatterns(text, patterns){
+  if(!patterns || !patterns.length) return text;
+  let out = text;
+  for(const p of patterns){
+    if(!p || !p.trim()) continue;
+    try{
+      out = out.replace(new RegExp(p, 'gi'), '');
+    }catch(e){ console.warn('잘못된 제거 패턴(무시함):', p, e.message); }
+  }
+  return out.replace(/[ \t]+\n/g,'\n').replace(/\n{3,}/g,'\n\n').trim();
+}
+
 async function fetchChapter(profile, url){
+  let result;
   if(profile.mode === 'reader'){
     try{
-      return await fetchViaReader(url);
+      result = await fetchViaReader(url);
     }catch(e){
       console.warn('리더 프록시 실패, 선택자/자동감지 방식으로 재시도:', e.message);
-      return await fetchViaSelector(profile, url);
+      result = await fetchViaSelector(profile, url);
     }
   } else {
-    return await fetchViaSelector(profile, url);
+    result = await fetchViaSelector(profile, url);
   }
+  if(profile.textStripPatterns && profile.textStripPatterns.length){
+    result = { title: result.title, body: applyStripPatterns(result.body, profile.textStripPatterns) };
+  }
+  return result;
 }
 
 function cleanBlockText(el){
@@ -1656,7 +1693,7 @@ async function loadAndTranslate(url, {silent}={}){
     const ids = extractIdAndPage(profile, url);
     const {title, body} = await fetchChapter(profile, url);
 
-    const parts = body.length > LONG_PAGE_THRESHOLD ? splitIntoParts(body, LONG_PAGE_THRESHOLD) : [body];
+    const parts = body.length > memory.longPageThreshold ? splitIntoParts(body, memory.longPageThreshold) : [body];
 
     // 본문을 받자마자 화면을 그 화로 즉시 전환한다 (번역은 아직 안 끝났어도 원문/제목/이전화 위치는 바로 반영).
     const entry = { url, page: ids?ids.page:'', title, original: body, translated: '', parts, translatedParts: [], partsDone: 0, partsStarted: 1 };
@@ -2132,11 +2169,23 @@ function matchProfileForUrl(url){
   }catch(e){ return getProfile(currentProfileId); }
 }
 
+function normalizeUrl(urlStr){
+  try{
+    const u = new URL(urlStr.trim());
+    u.hash = '';
+    return u.toString();
+  }catch(e){
+    return (urlStr||'').trim();
+  }
+}
+
 async function doLoad(url){
   if(!url){ toast('URL을 입력하세요.'); return; }
+  url = normalizeUrl(url);
   const profile = matchProfileForUrl(url);
   if(profile){ currentProfileId = profile.id; renderProfileSelect(); renderProfileSummary(); }
   updateBookKey(url);
+  renderBookList();
   restoreChapters();
   setMobileTab('reader', {resetScroll:true});
   await loadOrCached(url);
